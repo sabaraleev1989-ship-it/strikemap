@@ -3,13 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical</title>
+    <title>Scorpion Tactical Board</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root {
             --bg-dark: #0f111a;
             --panel-bg: #1a1c2c;
-            --accent: #ff9f0a; /* Оранжевый тактический */
+            --accent: #ff9f0a;
             --danger: #ff453a;
             --success: #32d74b;
         }
@@ -20,17 +20,14 @@
             overflow: hidden; display: flex; flex-direction: column; height: 100vh;
         }
 
-        /* Красивая панель управления */
         .toolbar {
             background: var(--panel-bg);
-            padding: 12px;
+            padding: 10px;
             display: flex;
-            gap: 10px;
+            gap: 8px;
             align-items: center;
             justify-content: center;
-            border-bottom: 1px solid #333;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-            flex-wrap: wrap;
+            border-bottom: 2px solid #333;
             z-index: 100;
         }
 
@@ -38,22 +35,22 @@
             background: #2c2e43;
             border: 1px solid #444;
             color: white;
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 18px; /* Крупные иконки и текст */
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 20px;
             cursor: pointer;
-            transition: 0.2s;
             display: flex;
             align-items: center;
             justify-content: center;
+            min-width: 50px;
         }
 
-        button:active { transform: scale(0.9); }
+        button:active { background: #3d3f5a; transform: scale(0.95); }
         
         .active-tool {
             border-color: var(--accent);
             background: rgba(255, 159, 10, 0.2);
-            box-shadow: 0 0 10px var(--accent);
+            box-shadow: 0 0 8px var(--accent);
         }
 
         #viewport {
@@ -68,43 +65,41 @@
             position: absolute;
             top: 0; left: 0;
             transform-origin: 0 0;
-            image-rendering: pixelated;
+            image-rendering: auto;
         }
 
-        #bgCanvas { z-index: 1; }
-        #drawCanvas { z-index: 2; }
+        #bgCanvas { z-index: 1; pointer-events: none; }
+        #drawCanvas { z-index: 2; pointer-events: none; }
 
-        /* Индикатор зума */
         .status-bar {
             position: absolute;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
             background: rgba(0,0,0,0.7);
-            padding: 5px 15px;
+            padding: 6px 16px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 14px;
             z-index: 10;
+            border: 1px solid #444;
             pointer-events: none;
-            border: 1px solid #333;
         }
     </style>
 </head>
 <body>
 
 <div class="toolbar">
-    <select id="mapPresets" onchange="loadMap(this.value)" style="flex-grow: 1; max-width: 200px;">
+    <select id="mapPresets" onchange="loadMap(this.value)" style="font-size: 16px;">
         <option value="">🗺️ Полигон</option>
         <option value="logo1.png">99 Проблем</option>
         <option value="logo2.png">Ахун</option>
     </select>
 
-    <input type="color" id="colorPicker" value="#32d74b" style="width: 45px; height: 45px; border: none; background: none;">
+    <input type="color" id="colorPicker" value="#32d74b" style="width: 50px; height: 50px; border: none; padding: 0; background: none; cursor: pointer;">
     
     <button id="drawBtn" class="active-tool" onclick="setTool('draw')">✏️</button>
     <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
     <button onclick="undo()">↩️</button>
-    <button onclick="redo()">↪️</button>
     <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
     <button onclick="saveImage()" style="color: var(--success)">💾</button>
 </div>
@@ -125,16 +120,16 @@
 
     let bgImage = new Image();
     let currentTool = 'draw';
-    let history = [], redoStack = [];
+    let history = [];
 
-    // Состояние трансформации
-    let scale = 1, lastScale = 1;
-    let posX = 0, posY = 0, lastPosX = 0, lastPosY = 0;
+    // Состояние холста
+    let scale = 1, posX = 0, posY = 0;
+    let lastScale = 1, lastPosX = 0, lastPosY = 0;
     
-    // Настройка Hammer.js
+    // Инициализация Hammer.js для жестов (ТОЛЬКО 2 пальца для карты)
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
-    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
+    mc.add(new Hammer.Pan({ pointers: 2, threshold: 0 }));
 
     function setTool(tool) {
         currentTool = tool;
@@ -148,60 +143,60 @@
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = bgImage.height;
-            history = []; redoStack = [];
+            history = [];
             resetView();
-            updateTransform();
         };
     }
 
     function updateTransform() {
-        const transform = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        bgCanvas.style.transform = transform;
-        drawCanvas.style.transform = transform;
+        const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        bgCanvas.style.transform = tr;
+        drawCanvas.style.transform = tr;
         bgCtx.drawImage(bgImage, 0, 0);
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
 
     function resetView() {
-        const screenRatio = viewport.clientWidth / viewport.clientHeight;
-        const mapRatio = bgImage.width / bgImage.height;
-        scale = (mapRatio > screenRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
+        const sRatio = viewport.clientWidth / viewport.clientHeight;
+        const mRatio = bgImage.width / bgImage.height;
+        scale = (mRatio > sRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
         posX = (viewport.clientWidth - bgImage.width * scale) / 2;
         posY = (viewport.clientHeight - bgImage.height * scale) / 2;
         updateTransform();
     }
 
-    // Обработка жестов (Zoom & Pan)
-    mc.on("pinchstart panstart", () => {
+    // Обработка жестов карты (ДВА ПАЛЬЦА)
+    mc.on("pinchstart panstart", (e) => {
         lastScale = scale;
         lastPosX = posX;
         lastPosY = posY;
     });
 
     mc.on("pinchmove panmove", (e) => {
-        if (e.pointers.length === 2) {
-            scale = Math.max(0.2, Math.min(lastScale * e.scale, 5));
-        }
+        if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
         posX = lastPosX + e.deltaX;
         posY = lastPosY + e.deltaY;
         updateTransform();
     });
 
-    // Рисование (обычные Touch события)
+    // Рисование (ОДИН ПАЛЕЦ)
     let isDrawing = false;
+
     viewport.addEventListener('pointerdown', (e) => {
-        if (e.pointerType === 'touch' && mc.get('pan').options.pointers > 1) return;
+        // Если пальцев больше 1 или это не главный палец - выходим
+        if (e.pointerType === 'touch' && !e.isPrimary) return;
+        
         isDrawing = true;
         saveState();
-        drawCtx.beginPath();
         const p = getCoords(e);
+        drawCtx.beginPath();
         drawCtx.moveTo(p.x, p.y);
     });
 
     viewport.addEventListener('pointermove', (e) => {
-        if (!isDrawing || (e.pointerType === 'touch' && e.buttons === 0)) return;
-        const p = getCoords(e);
+        if (!isDrawing || (e.pointerType === 'touch' && !e.isPrimary)) return;
         
+        const p = getCoords(e);
         drawCtx.lineCap = 'round';
         drawCtx.lineJoin = 'round';
         
@@ -228,30 +223,15 @@
         };
     }
 
-    // Функции кнопок
     function saveState() {
+        if (history.length > 30) history.shift();
         history.push(drawCanvas.toDataURL());
-        if (history.length > 25) history.shift();
-        redoStack = [];
     }
 
     function undo() {
-        if (history.length > 0) {
-            redoStack.push(drawCanvas.toDataURL());
-            applyState(history.pop());
-        }
-    }
-
-    function redo() {
-        if (redoStack.length > 0) {
-            history.push(drawCanvas.toDataURL());
-            applyState(redoStack.pop());
-        }
-    }
-
-    function applyState(url) {
+        if (history.length === 0) return;
         const img = new Image();
-        img.src = url;
+        img.src = history.pop();
         img.onload = () => {
             drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
             drawCtx.globalCompositeOperation = 'source-over';
@@ -260,9 +240,9 @@
     }
 
     function clearAll() {
-        if(confirm("Стереть все рисунки?")) {
-            saveState();
+        if(confirm("Очистить все рисунки?")) {
             drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            history = [];
         }
     }
 
