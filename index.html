@@ -20,40 +20,52 @@
             overflow: hidden; display: flex; flex-direction: column; height: 100vh;
         }
 
-        .toolbar {
-            background: var(--panel-bg);
+        /* Заставка на весь экран */
+        #startScreen {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: var(--bg-dark);
+            z-index: 999; /* Поверх всего */
             display: flex;
             flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease, visibility 0.5s;
+        }
+
+        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
+
+        #startScreen .info-btn {
+            position: absolute; bottom: 50px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px 30px; border-radius: 30px;
+            border: 2px solid var(--accent);
+            font-weight: bold; text-transform: uppercase;
+        }
+
+        .toolbar {
+            background: var(--panel-bg);
+            display: flex; flex-direction: column;
             border-bottom: 2px solid #333;
             z-index: 100;
         }
 
         .tool-row {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            padding: 8px 5px;
-            gap: 8px;
+            display: flex; justify-content: space-around;
+            align-items: center; padding: 8px 5px; gap: 8px;
         }
 
         .tool-row:first-child { border-bottom: 1px solid #2a2d3e; }
 
         select, button {
-            background: #2c2e43;
-            border: 1px solid #444;
-            color: white;
-            padding: 12px;
-            border-radius: 12px;
-            font-size: 24px;
-            cursor: pointer;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: #2c2e43; border: 1px solid #444;
+            color: white; padding: 12px; border-radius: 12px;
+            font-size: 24px; cursor: pointer; flex: 1;
+            display: flex; align-items: center; justify-content: center;
             min-height: 60px;
         }
 
-        select { font-size: 16px; flex: 2; }
+        select { font-size: 16px; flex: 2; z-index: 1001; }
 
         .active-tool {
             border-color: var(--accent);
@@ -62,29 +74,13 @@
         }
 
         #viewport {
-            flex-grow: 1;
-            position: relative;
-            background: #000;
-            touch-action: none;
+            flex-grow: 1; position: relative;
+            background: #000; touch-action: none; overflow: hidden;
         }
 
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        #bgCanvas { z-index: 1; pointer-events: none; }
-        #drawCanvas { z-index: 2; pointer-events: none; }
-
-        #startScreen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-dark);
-            z-index: 150;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s ease;
-        }
-
-        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
+        #bgCanvas { z-index: 1; }
+        #drawCanvas { z-index: 2; }
 
         .status-bar {
             position: absolute; bottom: 15px; left: 50%;
@@ -98,13 +94,13 @@
 
 <div id="startScreen">
     <img src="logo3.png" alt="Scorpion Gen 2.0">
-    <p style="position: absolute; bottom: 40px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 20px; border: 1px solid var(--accent);">Выберите полигон</p>
+    <div class="info-btn">Выберите полигон в меню</div>
 </div>
 
 <div class="toolbar">
     <div class="tool-row">
         <select id="mapPresets" onchange="loadMap(this.value)">
-            <option value="">🗺️ Полигоны</option>
+            <option value="">🗺️ ПОЛИГОНЫ</option>
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
@@ -140,12 +136,13 @@
 
     let bgImage = new Image();
     let currentTool = 'draw';
-    let shapes = []; // Храним все стрелки как объекты
+    let shapes = [];
     let currentShape = null;
 
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
 
+    // Hammer.js
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
@@ -159,8 +156,11 @@
 
     function loadMap(url) {
         if (!url) return;
+        
+        // Скрываем заставку
         startScreen.style.opacity = '0';
-        setTimeout(() => { startScreen.style.display = 'none'; }, 500);
+        setTimeout(() => { startScreen.style.visibility = 'hidden'; }, 500);
+
         bgImage.src = url;
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
@@ -183,6 +183,7 @@
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
         bgCanvas.style.transform = drawCanvas.style.transform = tr;
         
+        bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
         bgCtx.drawImage(bgImage, 0, 0);
         
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
@@ -198,30 +199,31 @@
         drawCtx.strokeStyle = s.color;
         drawCtx.fillStyle = s.color;
         
-        // Линия
         drawCtx.moveTo(s.x1, s.y1);
         drawCtx.lineTo(s.x2, s.y2);
         drawCtx.stroke();
 
-        // Острие
         const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
         const headLen = 20 / scale;
         drawCtx.beginPath();
         drawCtx.moveTo(s.x2, s.y2);
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI / 6), s.y2 - headLen * Math.sin(angle - Math.PI / 6));
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI / 6), s.y2 - headLen * Math.sin(angle + Math.PI / 6));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/6), s.y2 - headLen * Math.sin(angle - Math.PI/6));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/6), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.closePath();
         drawCtx.fill();
 
-        // Текст (Позывной)
         if (s.label) {
-            drawCtx.font = `bold ${24/scale}px Arial`;
-            drawCtx.shadowBlur = 4;
+            drawCtx.font = `bold ${22/scale}px Arial`;
             drawCtx.shadowColor = "black";
+            drawCtx.shadowBlur = 5;
             drawCtx.fillText(s.label, s.x2 + 10/scale, s.y2);
             drawCtx.shadowBlur = 0;
         }
     }
+
+    mc.on("pinchstart panstart", (e) => {
+        lastScale = scale; lastPosX = posX; lastPosY = posY;
+    });
 
     mc.on("pinchmove panmove", (e) => {
         if (currentTool === 'move' || e.pointers.length >= 2) {
@@ -230,10 +232,6 @@
             posY = lastPosY + e.deltaY;
             redraw();
         }
-    });
-
-    mc.on("pinchstart panstart", (e) => {
-        lastScale = scale; lastPosX = posX; lastPosY = posY;
     });
 
     viewport.addEventListener('pointerdown', (e) => {
@@ -252,8 +250,8 @@
 
     window.addEventListener('pointerup', () => {
         if (currentShape) {
-            const callsign = prompt("Введите позывной для этой стрелки:", "");
-            if (callsign !== null) {
+            const callsign = prompt("Введите позывной:");
+            if (callsign) {
                 currentShape.label = callsign.toUpperCase();
                 shapes.push(currentShape);
             }
@@ -268,7 +266,7 @@
     }
 
     function undo() { shapes.pop(); redraw(); }
-    function clearAll() { if(confirm("Очистить карту?")) { shapes = []; redraw(); } }
+    function clearAll() { if(confirm("Очистить?")) { shapes = []; redraw(); } }
 
     function saveImage() {
         const temp = document.createElement('canvas');
@@ -276,10 +274,7 @@
         const tCtx = temp.getContext('2d');
         tCtx.drawImage(bgCanvas, 0, 0);
         tCtx.drawImage(drawCanvas, 0, 0);
-        const link = document.createElement('a');
-        link.download = 'tactical-plan.png';
-        link.href = temp.toDataURL();
-        link.click();
+        window.open(temp.toDataURL());
     }
 </script>
 </body>
