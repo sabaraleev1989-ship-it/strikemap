@@ -20,6 +20,12 @@
         #bgCanvas { z-index: 10; }
         #drawCanvas { z-index: 20; }
         #tempCanvas { z-index: 30; pointer-events: none; }
+        
+        /* Стили для ползунка толщины */
+        .size-slider { flex: 1.5; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .size-slider input { width: 100%; cursor: pointer; accent-color: var(--accent); }
+        .size-label { font-size: 10px; color: #aaa; text-transform: uppercase; }
+
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
 </head>
@@ -42,7 +48,13 @@
         <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
         <button id="drawBtn" class="active-tool" onclick="setTool('draw')">↗️</button>
         <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
-        <div style="flex:1; display:flex; justify-content:center;">
+        
+        <div class="size-slider">
+            <span class="size-label">Толщина</span>
+            <input type="range" id="lineWidth" min="2" max="20" value="6">
+        </div>
+
+        <div style="flex:0.5; display:flex; justify-content:center;">
             <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;">
         </div>
     </div>
@@ -62,6 +74,7 @@
     const bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
     const zoomDisplay = document.getElementById('zoomVal');
+    const sizeInput = document.getElementById('lineWidth');
 
     let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false, startPoint = {x: 0, y: 0};
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
@@ -77,7 +90,7 @@
 
     function saveState() {
         history.push(drawCanvas.toDataURL());
-        if (history.length > 15) history.shift();
+        if (history.length > 20) history.shift();
         redoStack = [];
     }
 
@@ -132,20 +145,22 @@
         const p = getCoords(e);
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         
+        const currentWidth = parseInt(sizeInput.value) / scale;
+
         if (currentTool === 'pencil') {
-            drawCtx.lineWidth = 6 / scale;
+            drawCtx.lineWidth = currentWidth;
             drawCtx.strokeStyle = document.getElementById('colorPicker').value;
             drawCtx.lineCap = 'round'; drawCtx.lineJoin = 'round';
             drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
         } else if (currentTool === 'erase') {
             drawCtx.globalCompositeOperation = 'destination-out';
-            drawCtx.lineWidth = 30 / scale;
+            drawCtx.lineWidth = 40 / scale; // Ластик оставляем широким для удобства
             drawCtx.lineCap = 'round';
             drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
             drawCtx.globalCompositeOperation = 'source-over';
         } else if (currentTool === 'draw') {
             const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, '', bend);
+            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, '', bend, currentWidth);
         }
     });
 
@@ -156,14 +171,15 @@
         if (currentTool === 'draw') {
             const label = prompt("Позывной:");
             const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, label, bend);
+            const currentWidth = parseInt(sizeInput.value) / scale;
+            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, label, bend, currentWidth);
             tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         }
     });
 
-    function drawArrow(ctx, x1, y1, x2, y2, color, label, bend = 0.2) {
+    function drawArrow(ctx, x1, y1, x2, y2, color, label, bend, width) {
         ctx.beginPath();
-        ctx.lineWidth = 6 / scale;
+        ctx.lineWidth = width;
         ctx.strokeStyle = color; ctx.fillStyle = color;
         const cpX = (x1 + x2) / 2 - (y2 - y1) * bend;
         const cpY = (y1 + y2) / 2 + (x2 - x1) * bend;
@@ -172,7 +188,7 @@
         ctx.stroke();
 
         const angle = Math.atan2(y2 - cpY, x2 - cpX);
-        const headLen = 22 / scale;
+        const headLen = (width * 3) + 10; // Размер наконечника зависит от толщины линии
         ctx.beginPath();
         ctx.moveTo(x2, y2);
         ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI/6), y2 - headLen * Math.sin(angle - Math.PI/6));
@@ -185,13 +201,10 @@
             ctx.font = `bold ${24/scale}px Arial`;
             ctx.textAlign = "center";
             ctx.shadowColor = "black"; ctx.shadowBlur = 5;
-            
-            // Находим угол наклона линии в центре изгиба для поворота текста
             const textAngle = Math.atan2(y2 - y1, x2 - x1);
             ctx.translate(cpX, cpY);
             ctx.rotate(textAngle);
-            
-            ctx.fillText(label.toUpperCase(), 0, -15/scale);
+            ctx.fillText(label.toUpperCase(), 0, -(width + 10));
             ctx.restore();
         }
     }
