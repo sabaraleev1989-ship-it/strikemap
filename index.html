@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tactical Board - Scorpion</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #121212;
+            color: #e0e0e0;
+            font-family: sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .toolbar {
+            background: #1f1f1f;
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            border-bottom: 2px solid #333;
+            flex-wrap: wrap;
+            z-index: 10;
+        }
+
+        select, button {
+            background: #333;
+            border: 1px solid #444;
+            color: white;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .active-tool {
+            border-color: #00FF00;
+            background: #2a4a2a;
+        }
+
+        #canvas-container {
+            flex-grow: 1;
+            position: relative;
+            background-color: #1a1a1a;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+
+        .btn-clear { background: #611; border-color: #822; }
+        .btn-save { background: #141; border-color: #262; }
+    </style>
+</head>
+<body>
+
+<div class="toolbar">
+    <select id="mapPresets" onchange="loadPresetMap(this.value)">
+        <option value="">-- Выбери полигон --</option>
+        <option value="logo1.png">99 проблем</option>
+        <option value="logo2.png">Ахун</option>
+    </select>
+
+    <input type="color" id="colorPicker" value="#00FF00">
+    
+    <button id="drawBtn" class="active-tool" onclick="setTool('draw')">✏️ Рисовать</button>
+    <button id="eraseBtn" onclick="setTool('erase')">🧽 Ластик</button>
+
+    <button class="btn-clear" onclick="clearCanvas()">🗑️ Сброс</button>
+    <button class="btn-save" onclick="saveImage()">💾 Сохранить</button>
+</div>
+
+<div id="canvas-container">
+    <canvas id="tacticalCanvas"></canvas>
+</div>
+
+<script>
+    const canvas = document.getElementById('tacticalCanvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+    const colorPicker = document.getElementById('colorPicker');
+    const mapPresets = document.getElementById('mapPresets');
+
+    let drawing = false;
+    let bgImage = null;
+    let currentTool = 'draw';
+
+    function resize() {
+        canvas.width = container.clientWidth;
+        canvas.height = container.clientHeight;
+        if (bgImage) drawBackground();
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function setTool(tool) {
+        currentTool = tool;
+        document.getElementById('drawBtn').className = tool === 'draw' ? 'active-tool' : '';
+        document.getElementById('eraseBtn').className = tool === 'erase' ? 'active-tool' : '';
+    }
+
+    function getCoords(e) {
+        const rect = canvas.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function startDrawing(e) {
+        drawing = true;
+        const coords = getCoords(e);
+        ctx.beginPath();
+        ctx.moveTo(coords.x, coords.y);
+        e.preventDefault();
+    }
+
+    function draw(e) {
+        if (!drawing) return;
+        const coords = getCoords(e);
+        
+        ctx.lineWidth = currentTool === 'draw' ? 5 : 20;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        
+        // Если ластик - используем режим "destination-out" для стирания
+        // или просто перерисовываем фон. Для простоты здесь используем очистку.
+        if (currentTool === 'erase') {
+            ctx.globalCompositeOperation = 'destination-out';
+        } else {
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.strokeStyle = colorPicker.value;
+        }
+
+        ctx.lineTo(coords.x, coords.y);
+        ctx.stroke();
+        e.preventDefault();
+    }
+
+    function stopDrawing() {
+        drawing = false;
+        // После ластика возвращаем обычный режим рисования
+        ctx.globalCompositeOperation = 'source-over';
+    }
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    window.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('touchstart', startDrawing, {passive: false});
+    canvas.addEventListener('touchmove', draw, {passive: false});
+    window.addEventListener('touchend', stopDrawing);
+
+    function loadPresetMap(url) {
+        if (!url) return;
+        const img = new Image();
+        img.onload = function() {
+            bgImage = img;
+            clearCanvas();
+        };
+        img.src = url;
+    }
+
+    function drawBackground() {
+        if (!bgImage) return;
+        const ratio = Math.min(canvas.width / bgImage.width, canvas.height / bgImage.height);
+        const nw = bgImage.width * ratio;
+        const nh = bgImage.height * ratio;
+        ctx.drawImage(bgImage, (canvas.width - nw)/2, (canvas.height - nh)/2, nw, nh);
+    }
+
+    function clearCanvas() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        if (bgImage) {
+            ctx.globalCompositeOperation = 'source-over';
+            drawBackground();
+        }
+    }
+
+    function saveImage() {
+        // Чтобы сохранить картинку вместе с фоном
+        const link = document.createElement('a');
+        link.download = 'plan-' + mapPresets.options[mapPresets.selectedIndex].text + '.png';
+        link.href = canvas.toDataURL();
+        link.click();
+    }
+</script>
+
+</body>
+</html>
