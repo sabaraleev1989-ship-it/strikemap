@@ -43,14 +43,15 @@
             align-items: center;
             justify-content: center;
             min-width: 50px;
+            transition: 0.2s;
         }
 
         button:active { background: #3d3f5a; transform: scale(0.95); }
         
         .active-tool {
             border-color: var(--accent);
-            background: rgba(255, 159, 10, 0.2);
-            box-shadow: 0 0 8px var(--accent);
+            background: rgba(255, 159, 10, 0.3);
+            box-shadow: 0 0 10px var(--accent);
         }
 
         #viewport {
@@ -65,7 +66,6 @@
             position: absolute;
             top: 0; left: 0;
             transform-origin: 0 0;
-            image-rendering: auto;
         }
 
         #bgCanvas { z-index: 1; pointer-events: none; }
@@ -90,12 +90,16 @@
 
 <div class="toolbar">
     <select id="mapPresets" onchange="loadMap(this.value)" style="font-size: 16px;">
-        <option value="">🗺️ Полигон</option>
+        <option value="">🗺️ Карта</option>
         <option value="logo1.png">99 Проблем</option>
         <option value="logo2.png">Ахун</option>
     </select>
 
-    <input type="color" id="colorPicker" value="#32d74b" style="width: 50px; height: 50px; border: none; padding: 0; background: none; cursor: pointer;">
+    <button id="moveBtn" onclick="setTool('move')" title="Переместить карту">✥</button>
+    
+    <div style="width: 1px; height: 30px; background: #444; margin: 0 5px;"></div>
+
+    <input type="color" id="colorPicker" value="#32d74b" style="width: 45px; height: 45px; border: none; padding: 0; background: none; cursor: pointer;">
     
     <button id="drawBtn" class="active-tool" onclick="setTool('draw')">✏️</button>
     <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
@@ -119,22 +123,25 @@
     const zoomDisplay = document.getElementById('zoomVal');
 
     let bgImage = new Image();
-    let currentTool = 'draw';
+    let currentTool = 'draw'; // Режимы: 'draw', 'erase', 'move'
     let history = [];
 
-    // Состояние холста
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
     
-    // Инициализация Hammer.js для жестов (ТОЛЬКО 2 пальца для карты)
+    // Инициализация Hammer.js
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
-    mc.add(new Hammer.Pan({ pointers: 2, threshold: 0 }));
+    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
 
     function setTool(tool) {
         currentTool = tool;
         document.getElementById('drawBtn').classList.toggle('active-tool', tool === 'draw');
         document.getElementById('eraseBtn').classList.toggle('active-tool', tool === 'erase');
+        document.getElementById('moveBtn').classList.toggle('active-tool', tool === 'move');
+        
+        // Меняем курсор для наглядности
+        viewport.style.cursor = tool === 'move' ? 'move' : 'crosshair';
     }
 
     function loadMap(url) {
@@ -165,26 +172,30 @@
         updateTransform();
     }
 
-    // Обработка жестов карты (ДВА ПАЛЬЦА)
+    // ЛОГИКА ЖЕСТОВ (Hammer.js)
     mc.on("pinchstart panstart", (e) => {
+        if (currentTool !== 'move' && e.pointers.length < 2) return;
         lastScale = scale;
         lastPosX = posX;
         lastPosY = posY;
     });
 
     mc.on("pinchmove panmove", (e) => {
-        if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
-        posX = lastPosX + e.deltaX;
-        posY = lastPosY + e.deltaY;
-        updateTransform();
+        // Двигаем карту если включен режим перемещения ИЛИ если используется два пальца в любом режиме
+        if (currentTool === 'move' || e.pointers.length >= 2) {
+            if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
+            posX = lastPosX + e.deltaX;
+            posY = lastPosY + e.deltaY;
+            updateTransform();
+        }
     });
 
-    // Рисование (ОДИН ПАЛЕЦ)
+    // ЛОГИКА РИСОВАНИЯ
     let isDrawing = false;
 
     viewport.addEventListener('pointerdown', (e) => {
-        // Если пальцев больше 1 или это не главный палец - выходим
-        if (e.pointerType === 'touch' && !e.isPrimary) return;
+        if (currentTool === 'move') return; // В режиме перемещения не рисуем
+        if (e.pointerType === 'touch' && !e.isPrimary) return; // Только один палец рисует
         
         isDrawing = true;
         saveState();
@@ -194,7 +205,7 @@
     });
 
     viewport.addEventListener('pointermove', (e) => {
-        if (!isDrawing || (e.pointerType === 'touch' && !e.isPrimary)) return;
+        if (!isDrawing || currentTool === 'move' || (e.pointerType === 'touch' && !e.isPrimary)) return;
         
         const p = getCoords(e);
         drawCtx.lineCap = 'round';
