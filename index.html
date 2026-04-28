@@ -40,8 +40,6 @@
             align-items: center; padding: 8px 5px; gap: 8px;
         }
 
-        .tool-row:first-child { border-bottom: 1px solid #2a2d3e; }
-
         select, button {
             background: #2c2e43; border: 1px solid #444;
             color: white; padding: 12px; border-radius: 12px;
@@ -65,14 +63,9 @@
         }
 
         #startScreen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg-dark);
-            z-index: 500;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark); z-index: 500;
+            display: flex; align-items: center; justify-content: center;
             visibility: visible;
         }
 
@@ -81,6 +74,7 @@
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         #bgCanvas { z-index: 10; }
         #drawCanvas { z-index: 20; }
+        #tempCanvas { z-index: 30; pointer-events: none; } /* Для предпросмотра */
 
         .status-bar {
             position: absolute; bottom: 15px; left: 50%;
@@ -117,11 +111,10 @@
 </div>
 
 <div id="viewport">
-    <div id="startScreen">
-        <img src="logo3.png" alt="Scorpion Splash">
-    </div>
+    <div id="startScreen"><img src="logo3.png" alt="Scorpion"></div>
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
+    <canvas id="tempCanvas"></canvas>
     <div class="status-bar" id="zoomVal">Масштаб: 100%</div>
 </div>
 
@@ -130,19 +123,25 @@
     const startScreen = document.getElementById('startScreen');
     const bgCanvas = document.getElementById('bgCanvas');
     const drawCanvas = document.getElementById('drawCanvas');
+    const tempCanvas = document.getElementById('tempCanvas');
+    
     const bgCtx = bgCanvas.getContext('2d');
     const drawCtx = drawCanvas.getContext('2d');
+    const tempCtx = tempCanvas.getContext('2d');
     const zoomDisplay = document.getElementById('zoomVal');
 
     let bgImage = new Image();
     let currentTool = 'draw';
-    let history = []; 
+    
+    // Для Undo/Redo в растровом режиме храним снимки состояния (Canvas Snapshots)
+    let history = [];
     let redoStack = [];
-    let currentShape = null;
-    let currentLine = null;
+    const MAX_HISTORY = 10;
 
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
+    let isDrawing = false;
+    let startPoint = {x: 0, y: 0};
 
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
@@ -150,114 +149,173 @@
 
     function setTool(tool) {
         currentTool = tool;
-        document.getElementById('drawBtn').classList.toggle('active-tool', tool === 'draw');
-        document.getElementById('pencilBtn').classList.toggle('active-tool', tool === 'pencil');
-        document.getElementById('eraseBtn').classList.toggle('active-tool', tool === 'erase');
-        document.getElementById('moveBtn').classList.toggle('active-tool', tool === 'move');
+        ['drawBtn', 'pencilBtn', 'eraseBtn', 'moveBtn'].forEach(id => {
+            document.getElementById(id).classList.toggle('active-tool', id.startsWith(tool));
+        });
+    }
+
+    function saveState() {
+        history.push(drawCanvas.toDataURL());
+        if (history.length > MAX_HISTORY) history.shift();
+        redoStack = [];
     }
 
     function loadMap(url) {
         if (!url) {
             startScreen.style.visibility = 'visible';
-            startScreen.style.pointerEvents = 'auto';
-            bgImage.src = '';
-            bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
             return;
         }
         startScreen.style.visibility = 'hidden';
-        startScreen.style.pointerEvents = 'none';
         bgImage.src = url;
         bgImage.onload = () => {
-            bgCanvas.width = drawCanvas.width = bgImage.width;
-            bgCanvas.height = drawCanvas.height = bgImage.height;
+            [bgCanvas, drawCanvas, tempCanvas].forEach(c => {
+                c.width = bgImage.width;
+                c.height = bgImage.height;
+            });
+            drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+            history = [];
             resetView();
         };
     }
 
     function resetView() {
-        if (!bgImage.src) return;
         const sRatio = viewport.clientWidth / viewport.clientHeight;
         const mRatio = bgImage.width / bgImage.height;
         scale = (mRatio > sRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
         posX = (viewport.clientWidth - bgImage.width * scale) / 2;
         posY = (viewport.clientHeight - bgImage.height * scale) / 2;
-        redraw();
+        applyTransform();
     }
 
-    function redraw() {
+    function applyTransform() {
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        bgCanvas.style.transform = drawCanvas.style.transform = tr;
-        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
-        if (bgImage.src && bgImage.complete) bgCtx.drawImage(bgImage, 0, 0);
-        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-        history.forEach(item => {
-            if (item.type === 'pencil') drawFreeLine(item);
-            else drawArrow(item);
-        });
-        if (currentShape) drawArrow(currentShape);
-        if (currentLine) drawFreeLine(currentLine);
+        [bgCanvas, drawCanvas, tempCanvas].forEach(c => c.style.transform = tr);
+        bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
+        bgCtx.drawImage(bgImage, 0, 0);
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
 
-    function drawFreeLine(line) {
-        if (!line.points || line.points.length < 1) return;
-        drawCtx.beginPath();
-        drawCtx.strokeStyle = line.color;
-        drawCtx.lineWidth = 6 / scale;
-        drawCtx.lineCap = 'round';
-        drawCtx.lineJoin = 'round';
-        drawCtx.moveTo(line.points[0].x, line.points[0].y);
-        line.points.forEach(p => drawCtx.lineTo(p.x, p.y));
-        drawCtx.stroke();
+    function getCoords(e) {
+        const rect = viewport.getBoundingClientRect();
+        return { 
+            x: (e.clientX - rect.left - posX) / scale, 
+            y: (e.clientY - rect.top - posY) / scale 
+        };
     }
 
-    function drawArrow(s) {
-        drawCtx.beginPath();
-        drawCtx.lineWidth = 6 / scale;
-        drawCtx.strokeStyle = s.color;
-        drawCtx.fillStyle = s.color;
-        const bendFactor = s.bend || 0.2;
-        const cpX = (s.x1 + s.x2) / 2 - (s.y2 - s.y1) * bendFactor;
-        const cpY = (s.y1 + s.y2) / 2 + (s.x2 - s.x1) * bendFactor;
-        drawCtx.moveTo(s.x1, s.y1);
-        drawCtx.quadraticCurveTo(cpX, cpY, s.x2, s.y2);
-        drawCtx.stroke();
-        const angle = Math.atan2(s.y2 - cpY, s.x2 - cpX);
+    viewport.addEventListener('pointerdown', (e) => {
+        if (!bgImage.src || (e.pointerType === 'touch' && !e.isPrimary)) return;
+        const p = getCoords(e);
+        
+        if (currentTool === 'move') return;
+
+        isDrawing = true;
+        startPoint = p;
+        saveState();
+
+        if (currentTool === 'pencil' || currentTool === 'erase') {
+            drawCtx.beginPath();
+            drawCtx.moveTo(p.x, p.y);
+        }
+    });
+
+    viewport.addEventListener('pointermove', (e) => {
+        if (!isDrawing) return;
+        const p = getCoords(e);
+
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+
+        if (currentTool === 'pencil') {
+            drawCtx.lineWidth = 6 / scale;
+            drawCtx.strokeStyle = document.getElementById('colorPicker').value;
+            drawCtx.lineCap = 'round';
+            drawCtx.lineTo(p.x, p.y);
+            drawCtx.stroke();
+        } else if (currentTool === 'erase') {
+            drawCtx.globalCompositeOperation = 'destination-out';
+            drawCtx.lineWidth = 30 / scale; // Ширина ластика
+            drawCtx.lineCap = 'round';
+            drawCtx.lineTo(p.x, p.y);
+            drawCtx.stroke();
+            drawCtx.globalCompositeOperation = 'source-over';
+        } else if (currentTool === 'draw') {
+            // Рисуем стрелку во временном слое
+            const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
+            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, '', bend);
+        }
+    });
+
+    window.addEventListener('pointerup', (e) => {
+        if (!isDrawing) return;
+        isDrawing = false;
+        const p = getCoords(e);
+
+        if (currentTool === 'draw') {
+            const label = prompt("Позывной:");
+            const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
+            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, label, bend);
+            tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
+        }
+    });
+
+    function drawArrow(ctx, x1, y1, x2, y2, color, label, bend = 0.2) {
+        ctx.beginPath();
+        ctx.lineWidth = 6 / scale;
+        ctx.strokeStyle = color;
+        ctx.fillStyle = color;
+        
+        const cpX = (x1 + x2) / 2 - (y2 - y1) * bend;
+        const cpY = (y1 + y2) / 2 + (x2 - x1) * bend;
+
+        ctx.moveTo(x1, y1);
+        ctx.quadraticCurveTo(cpX, cpY, x2, y2);
+        ctx.stroke();
+
+        const angle = Math.atan2(y2 - cpY, x2 - cpX);
         const headLen = 22 / scale;
-        drawCtx.beginPath();
-        drawCtx.moveTo(s.x2, s.y2);
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/6), s.y2 - headLen * Math.sin(angle - Math.PI/6));
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/6), s.y2 - headLen * Math.sin(angle + Math.PI/6));
-        drawCtx.closePath();
-        drawCtx.fill();
-        if (s.label) {
-            drawCtx.font = `bold ${24/scale}px Arial`;
-            drawCtx.textAlign = "center";
-            drawCtx.shadowColor = "black";
-            drawCtx.shadowBlur = 5;
-            drawCtx.fillText(s.label, s.x2, s.y2 - 20/scale);
-            drawCtx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI/6), y2 - headLen * Math.sin(angle - Math.PI/ HeadLen));
+        ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI/6), y2 - headLen * Math.sin(angle - Math.PI/6));
+        ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI/6), y2 - headLen * Math.sin(angle + Math.PI/6));
+        ctx.closePath();
+        ctx.fill();
+
+        if (label) {
+            ctx.font = `bold ${24/scale}px Arial`;
+            ctx.textAlign = "center";
+            ctx.shadowColor = "black";
+            ctx.shadowBlur = 5;
+            ctx.fillText(label.toUpperCase(), x2, y2 - 20/scale);
+            ctx.shadowBlur = 0;
         }
     }
 
-    function eraseAt(p) {
-        const threshold = 20 / scale; // Чувствительность ластика
-        const initialLen = history.length;
-        history = history.filter(item => {
-            if (item.type === 'pencil') {
-                return !item.points.some(pt => Math.hypot(pt.x - p.x, pt.y - p.y) < threshold);
-            } else {
-                const distToHead = Math.hypot(item.x2 - p.x, item.y2 - p.y);
-                const distToTail = Math.hypot(item.x1 - p.x, item.y1 - p.y);
-                return distToHead > threshold && distToTail > threshold;
-            }
-        });
-        if (history.length !== initialLen) {
-            redoStack = [];
-            redraw();
+    function undo() {
+        if (history.length > 0) {
+            redoStack.push(drawCanvas.toDataURL());
+            const img = new Image();
+            img.src = history.pop();
+            img.onload = () => {
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                drawCtx.drawImage(img, 0, 0);
+            };
         }
     }
 
+    function redo() {
+        if (redoStack.length > 0) {
+            history.push(drawCanvas.toDataURL());
+            const img = new Image();
+            img.src = redoStack.pop();
+            img.onload = () => {
+                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                drawCtx.drawImage(img, 0, 0);
+            };
+        }
+    }
+
+    // Обработка жестов масштабирования
     mc.on("pinchstart panstart", (e) => {
         lastScale = scale; lastPosX = posX; lastPosY = posY;
     });
@@ -267,65 +325,16 @@
             if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
             posX = lastPosX + e.deltaX;
             posY = lastPosY + e.deltaY;
-            redraw();
+            applyTransform();
         }
     });
 
-    let startX, startY;
-
-    viewport.addEventListener('pointerdown', (e) => {
-        if (e.pointerType === 'touch' && !e.isPrimary) return;
-        if (!bgImage.src) return;
-        const p = getCoords(e);
-        startX = e.clientX; startY = e.clientY;
-        if (currentTool === 'erase') {
-            eraseAt(p);
-        } else if (currentTool === 'draw') {
-            currentShape = { type: 'arrow', x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '', bend: 0.2 };
-        } else if (currentTool === 'pencil') {
-            currentLine = { type: 'pencil', points: [p], color: document.getElementById('colorPicker').value };
+    function clearAll() {
+        if(confirm("Очистить всё?")) {
+            saveState();
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         }
-    });
-
-    viewport.addEventListener('pointermove', (e) => {
-        const p = getCoords(e);
-        if (currentTool === 'erase' && e.buttons > 0) {
-            eraseAt(p);
-        } else if (currentShape) {
-            currentShape.x2 = p.x; currentShape.y2 = p.y;
-            currentShape.bend = (e.clientX - startX) * 0.001; 
-            redraw();
-        } else if (currentLine) {
-            currentLine.points.push(p);
-            redraw();
-        }
-    });
-
-    window.addEventListener('pointerup', () => {
-        if (currentShape) {
-            const callsign = prompt("Позывной:");
-            if (callsign !== null) {
-                currentShape.label = callsign.trim().toUpperCase();
-                history.push(currentShape);
-                redoStack = [];
-            }
-            currentShape = null;
-        } else if (currentLine) {
-            history.push(currentLine);
-            redoStack = [];
-            currentLine = null;
-        }
-        redraw();
-    });
-
-    function getCoords(e) {
-        const rect = viewport.getBoundingClientRect();
-        return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
-
-    function undo() { if (history.length) { redoStack.push(history.pop()); redraw(); } }
-    function redo() { if (redoStack.length) { history.push(redoStack.pop()); redraw(); } }
-    function clearAll() { if(confirm("Очистить?")) { history = []; redoStack = []; redraw(); } }
 
     function saveImage() {
         const temp = document.createElement('canvas');
@@ -337,12 +346,6 @@
         link.download = 'tactical-map.png';
         link.href = temp.toDataURL();
         link.click();
-    }
-
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.log(err));
-        });
     }
 </script>
 </body>
