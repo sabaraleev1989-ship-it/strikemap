@@ -181,11 +181,18 @@
         ctx.fill();
 
         if (label) {
+            ctx.save();
             ctx.font = `bold ${24/scale}px Arial`;
             ctx.textAlign = "center";
             ctx.shadowColor = "black"; ctx.shadowBlur = 5;
-            ctx.fillText(label.toUpperCase(), x2, y2 - 25/scale);
-            ctx.shadowBlur = 0;
+            
+            // Находим угол наклона линии в центре изгиба для поворота текста
+            const textAngle = Math.atan2(y2 - y1, x2 - x1);
+            ctx.translate(cpX, cpY);
+            ctx.rotate(textAngle);
+            
+            ctx.fillText(label.toUpperCase(), 0, -15/scale);
+            ctx.restore();
         }
     }
 
