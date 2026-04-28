@@ -75,11 +75,7 @@
             overflow: hidden;
         }
 
-        #startScreen img { 
-            width: 100%; 
-            height: 100%; 
-            object-fit: cover;
-        }
+        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
 
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         #bgCanvas { z-index: 10; }
@@ -103,6 +99,7 @@
             <option value="logo2.png">Ахун</option>
         </select>
         <button onclick="undo()">↩️</button>
+        <button onclick="redo()">↪️</button>
         <button onclick="saveImage()" style="color: var(--success)">💾</button>
         <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
     </div>
@@ -139,8 +136,11 @@
 
     let bgImage = new Image();
     let currentTool = 'draw';
-    let shapes = [];
-    let freeLines = [];
+    
+    // История действий
+    let history = []; 
+    let redoStack = [];
+
     let currentShape = null;
     let currentLine = null;
 
@@ -166,8 +166,8 @@
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = bgImage.height;
-            shapes = [];
-            freeLines = [];
+            history = [];
+            redoStack = [];
             resetView();
         };
     }
@@ -186,33 +186,29 @@
         bgCanvas.style.transform = drawCanvas.style.transform = tr;
         
         bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
-        bgCtx.drawImage(bgImage, 0, 0);
+        if (bgImage.complete && bgImage.src) bgCtx.drawImage(bgImage, 0, 0);
         
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         
-        freeLines.forEach(line => {
-            drawCtx.beginPath();
-            drawCtx.strokeStyle = line.color;
-            drawCtx.lineWidth = 6 / scale;
-            drawCtx.lineCap = 'round';
-            drawCtx.moveTo(line.points[0].x, line.points[0].y);
-            line.points.forEach(p => drawCtx.lineTo(p.x, p.y));
-            drawCtx.stroke();
+        history.forEach(item => {
+            if (item.type === 'pencil') drawFreeLine(item);
+            else if (item.type === 'arrow') drawArrow(item);
         });
 
-        shapes.forEach(drawArrow);
         if (currentShape) drawArrow(currentShape);
-        
-        if (currentLine) {
-            drawCtx.beginPath();
-            drawCtx.strokeStyle = currentLine.color;
-            drawCtx.lineWidth = 6 / scale;
-            drawCtx.moveTo(currentLine.points[0].x, currentLine.points[0].y);
-            currentLine.points.forEach(p => drawCtx.lineTo(p.x, p.y));
-            drawCtx.stroke();
-        }
+        if (currentLine) drawFreeLine(currentLine);
         
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
+    }
+
+    function drawFreeLine(line) {
+        drawCtx.beginPath();
+        drawCtx.strokeStyle = line.color;
+        drawCtx.lineWidth = 6 / scale;
+        drawCtx.lineCap = 'round';
+        drawCtx.moveTo(line.points[0].x, line.points[0].y);
+        line.points.forEach(p => drawCtx.lineTo(p.x, p.y));
+        drawCtx.stroke();
     }
 
     function drawArrow(s) {
@@ -234,6 +230,7 @@
         drawCtx.beginPath();
         drawCtx.moveTo(s.x2, s.y2);
         drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/6), s.y2 - headLen * Math.sin(angle - Math.PI/6));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/HeadLen), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/6), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.closePath();
         drawCtx.fill();
@@ -268,9 +265,9 @@
         startX = e.clientX; startY = e.clientY;
         
         if (currentTool === 'draw') {
-            currentShape = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '', bend: 0.2 };
+            currentShape = { type: 'arrow', x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '', bend: 0.2 };
         } else if (currentTool === 'pencil') {
-            currentLine = { points: [p], color: document.getElementById('colorPicker').value };
+            currentLine = { type: 'pencil', points: [p], color: document.getElementById('colorPicker').value };
         }
     });
 
@@ -293,11 +290,13 @@
             const callsign = prompt("Позывной (пусто = без надписи):");
             if (callsign !== null) {
                 currentShape.label = callsign.trim().toUpperCase();
-                shapes.push(currentShape);
+                history.push(currentShape);
+                redoStack = []; // Очищаем redo при новом действии
             }
             currentShape = null;
         } else if (currentLine) {
-            freeLines.push(currentLine);
+            history.push(currentLine);
+            redoStack = []; // Очищаем redo при новом действии
             currentLine = null;
         }
         redraw();
@@ -309,13 +308,25 @@
     }
 
     function undo() { 
-        if (shapes.length > 0) shapes.pop(); 
-        else freeLines.pop();
-        redraw(); 
+        if (history.length > 0) {
+            redoStack.push(history.pop());
+            redraw();
+        }
+    }
+
+    function redo() {
+        if (redoStack.length > 0) {
+            history.push(redoStack.pop());
+            redraw();
+        }
     }
     
     function clearAll() { 
-        if(confirm("Очистить?")) { shapes = []; freeLines = []; redraw(); } 
+        if(confirm("Очистить всё?")) { 
+            history = []; 
+            redoStack = []; 
+            redraw(); 
+        } 
     }
 
     function saveImage() {
@@ -330,11 +341,10 @@
         link.click();
     }
 
-    // РЕГИСТРАЦИЯ SERVICE WORKER
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('Офлайн-режим активен'))
+                .then(reg => console.log('SW зарегистрирован'))
                 .catch(err => console.log('Ошибка SW:', err));
         });
     }
