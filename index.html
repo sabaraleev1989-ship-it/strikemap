@@ -3,102 +3,79 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Tactical Board - Scorpion</title>
+    <title>Scorpion Tactical Board</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            background: #121212;
-            color: #e0e0e0;
-            font-family: sans-serif;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
+            margin: 0; padding: 0; background: #121212; color: #e0e0e0;
+            font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh;
         }
-
         .toolbar {
-            background: #1f1f1f;
-            padding: 8px;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-            border-bottom: 2px solid #333;
-            flex-wrap: wrap;
-            z-index: 10;
+            background: #1f1f1f; padding: 8px; display: flex; gap: 6px;
+            align-items: center; border-bottom: 2px solid #333; flex-wrap: wrap; z-index: 10;
         }
-
         select, button {
-            background: #333;
-            border: 1px solid #444;
-            color: white;
-            padding: 8px 10px;
-            border-radius: 6px;
-            font-size: 13px;
-            cursor: pointer;
+            background: #333; border: 1px solid #444; color: white;
+            padding: 8px; border-radius: 6px; cursor: pointer; font-size: 14px;
         }
-
-        .active-tool {
-            border-color: #00FF00;
-            background: #2a4a2a;
+        .active-tool { border-color: #00FF00; background: #2a4a2a; }
+        #viewport {
+            flex-grow: 1; position: relative; overflow: hidden; touch-action: none;
+            background: #1a1a1a; cursor: crosshair;
         }
-
-        #canvas-container {
-            flex-grow: 1;
-            position: relative;
-            background-color: #1a1a1a;
-            overflow: hidden;
+        /* Слои */
+        canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+        #bgCanvas { z-index: 1; }
+        #drawCanvas { z-index: 2; }
+        
+        .zoom-info {
+            position: absolute; bottom: 10px; right: 10px; z-index: 5;
+            background: rgba(0,0,0,0.5); padding: 4px 8px; border-radius: 4px; font-size: 12px;
         }
-
-        canvas {
-            display: block;
-            touch-action: none;
-        }
-
-        .btn-clear { background: #611; border-color: #822; }
-        .btn-save { background: #141; border-color: #262; }
     </style>
 </head>
 <body>
 
 <div class="toolbar">
-    <select id="mapPresets" onchange="loadPresetMap(this.value)">
-        <option value="">-- Выбери полигон --</option>
+    <select id="mapPresets" onchange="loadMap(this.value)">
+        <option value="">-- Полигон --</option>
         <option value="logo1.png">99 проблем</option>
         <option value="logo2.png">Ахун</option>
     </select>
 
     <input type="color" id="colorPicker" value="#00FF00">
+    <button id="drawBtn" class="active-tool" onclick="setTool('draw')">✏️</button>
+    <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
     
-    <button id="drawBtn" class="active-tool" onclick="setTool('draw')">✏️ Рисовать</button>
-    <button id="eraseBtn" onclick="setTool('erase')">🧽 Ластик</button>
-
-    <button class="btn-clear" onclick="clearCanvas()">🗑️ Сброс</button>
-    <button class="btn-save" onclick="saveImage()">💾 Сохранить</button>
+    <div style="width: 2px; height: 25px; background: #444; margin: 0 5px;"></div>
+    
+    <button onclick="undo()">↩️</button>
+    <button onclick="redo()">↪️</button>
+    <button onclick="resetZoom()">🔍 1:1</button>
+    <button class="btn-clear" onclick="clearAll()" style="background:#611">🗑️</button>
+    <button onclick="saveImage()" style="background:#141">💾</button>
 </div>
 
-<div id="canvas-container">
-    <canvas id="tacticalCanvas"></canvas>
+<div id="viewport">
+    <canvas id="bgCanvas"></canvas>
+    <canvas id="drawCanvas"></canvas>
+    <div class="zoom-info" id="zoomVal">100%</div>
 </div>
 
 <script>
-    const canvas = document.getElementById('tacticalCanvas');
-    const ctx = canvas.getContext('2d');
-    const container = document.getElementById('canvas-container');
-    const colorPicker = document.getElementById('colorPicker');
-    const mapPresets = document.getElementById('mapPresets');
+    const viewport = document.getElementById('viewport');
+    const bgCanvas = document.getElementById('bgCanvas');
+    const drawCanvas = document.getElementById('drawCanvas');
+    const bgCtx = bgCanvas.getContext('2d');
+    const drawCtx = drawCanvas.getContext('2d');
+    const zoomDisplay = document.getElementById('zoomVal');
 
-    let drawing = false;
-    let bgImage = null;
-    let currentTool = 'draw';
-
-    function resize() {
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        if (bgImage) drawBackground();
-    }
-    window.addEventListener('resize', resize);
-    resize();
+    let bgImage = new Image();
+    let scale = 1, offsetX = 0, offsetY = 0;
+    let drawing = false, currentTool = 'draw';
+    
+    // История для Undo/Redo
+    let history = [];
+    let redoStack = [];
 
     function setTool(tool) {
         currentTool = tool;
@@ -106,87 +83,134 @@
         document.getElementById('eraseBtn').className = tool === 'erase' ? 'active-tool' : '';
     }
 
-    function getCoords(e) {
-        const rect = canvas.getBoundingClientRect();
+    function loadMap(url) {
+        if (!url) return;
+        bgImage.src = url;
+        bgImage.onload = () => {
+            const w = bgImage.width;
+            const h = bgImage.height;
+            [bgCanvas, drawCanvas].forEach(c => { c.width = w; c.height = h; });
+            history = []; redoStack = [];
+            resetZoom();
+            render();
+        };
+    }
+
+    function render() {
+        bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+        bgCtx.drawImage(bgImage, 0, 0);
+        
+        const transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+        bgCanvas.style.transform = transform;
+        drawCanvas.style.transform = transform;
+        zoomDisplay.innerText = Math.round(scale * 100) + '%';
+    }
+
+    // Логика рисования
+    function getMousePos(e) {
+        const rect = viewport.getBoundingClientRect();
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: clientX - rect.left, y: clientY - rect.top };
+        return {
+            x: (clientX - rect.left - offsetX) / scale,
+            y: (clientY - rect.top - offsetY) / scale
+        };
     }
 
-    function startDrawing(e) {
+    viewport.addEventListener('pointerdown', (e) => {
+        if (e.button === 1 || e.shiftKey) return; // Для панорамирования мышкой
         drawing = true;
-        const coords = getCoords(e);
-        ctx.beginPath();
-        ctx.moveTo(coords.x, coords.y);
-        e.preventDefault();
-    }
+        saveState();
+        const pos = getMousePos(e);
+        drawCtx.beginPath();
+        drawCtx.moveTo(pos.x, pos.y);
+    });
 
-    function draw(e) {
+    window.addEventListener('pointermove', (e) => {
         if (!drawing) return;
-        const coords = getCoords(e);
+        const pos = getMousePos(e);
         
-        ctx.lineWidth = currentTool === 'draw' ? 5 : 20;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
         
-        // Если ластик - используем режим "destination-out" для стирания
-        // или просто перерисовываем фон. Для простоты здесь используем очистку.
         if (currentTool === 'erase') {
-            ctx.globalCompositeOperation = 'destination-out';
+            drawCtx.globalCompositeOperation = 'destination-out';
+            drawCtx.lineWidth = 30 / scale;
         } else {
-            ctx.globalCompositeOperation = 'source-over';
-            ctx.strokeStyle = colorPicker.value;
+            drawCtx.globalCompositeOperation = 'source-over';
+            drawCtx.strokeStyle = document.getElementById('colorPicker').value;
+            drawCtx.lineWidth = 5 / scale;
         }
 
-        ctx.lineTo(coords.x, coords.y);
-        ctx.stroke();
+        drawCtx.lineTo(pos.x, pos.y);
+        drawCtx.stroke();
+    });
+
+    window.addEventListener('pointerup', () => { drawing = false; });
+
+    // Зум и Панорамирование
+    viewport.addEventListener('wheel', (e) => {
         e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        scale *= delta;
+        render();
+    }, { passive: false });
+
+    function resetZoom() {
+        scale = 0.5; offsetX = 20; offsetY = 20;
+        render();
     }
 
-    function stopDrawing() {
-        drawing = false;
-        // После ластика возвращаем обычный режим рисования
-        ctx.globalCompositeOperation = 'source-over';
+    // Undo / Redo
+    function saveState() {
+        history.push(drawCanvas.toDataURL());
+        if (history.length > 20) history.shift();
+        redoStack = [];
     }
 
-    canvas.addEventListener('mousedown', startDrawing);
-    canvas.addEventListener('mousemove', draw);
-    window.addEventListener('mouseup', stopDrawing);
-    canvas.addEventListener('touchstart', startDrawing, {passive: false});
-    canvas.addEventListener('touchmove', draw, {passive: false});
-    window.addEventListener('touchend', stopDrawing);
+    function undo() {
+        if (history.length > 0) {
+            redoStack.push(drawCanvas.toDataURL());
+            const prevState = history.pop();
+            applyState(prevState);
+        }
+    }
 
-    function loadPresetMap(url) {
-        if (!url) return;
+    function redo() {
+        if (redoStack.length > 0) {
+            history.push(drawCanvas.toDataURL());
+            const nextState = redoStack.pop();
+            applyState(nextState);
+        }
+    }
+
+    function applyState(dataURL) {
         const img = new Image();
-        img.onload = function() {
-            bgImage = img;
-            clearCanvas();
+        img.src = dataURL;
+        img.onload = () => {
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            drawCtx.globalCompositeOperation = 'source-over';
+            drawCtx.drawImage(img, 0, 0);
         };
-        img.src = url;
     }
 
-    function drawBackground() {
-        if (!bgImage) return;
-        const ratio = Math.min(canvas.width / bgImage.width, canvas.height / bgImage.height);
-        const nw = bgImage.width * ratio;
-        const nh = bgImage.height * ratio;
-        ctx.drawImage(bgImage, (canvas.width - nw)/2, (canvas.height - nh)/2, nw, nh);
-    }
-
-    function clearCanvas() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        if (bgImage) {
-            ctx.globalCompositeOperation = 'source-over';
-            drawBackground();
+    function clearAll() {
+        if(confirm("Очистить все рисунки?")) {
+            saveState();
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         }
     }
 
     function saveImage() {
-        // Чтобы сохранить картинку вместе с фоном
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = drawCanvas.width;
+        tempCanvas.height = drawCanvas.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.drawImage(bgCanvas, 0, 0);
+        tempCtx.drawImage(drawCanvas, 0, 0);
         const link = document.createElement('a');
-        link.download = 'plan-' + mapPresets.options[mapPresets.selectedIndex].text + '.png';
-        link.href = canvas.toDataURL();
+        link.download = 'tactical-plan.png';
+        link.href = tempCanvas.toDataURL();
         link.click();
     }
 </script>
