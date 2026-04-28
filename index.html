@@ -24,7 +24,7 @@
             background: var(--panel-bg);
             display: flex; flex-direction: column;
             border-bottom: 2px solid #333;
-            z-index: 2000; /* Самый высокий приоритет для кнопок */
+            z-index: 2000;
             position: relative;
         }
 
@@ -57,7 +57,6 @@
             z-index: 1;
         }
 
-        /* Исправленная заставка */
         #startScreen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -68,14 +67,10 @@
             align-items: center;
             justify-content: center;
             transition: opacity 0.5s ease;
-            pointer-events: none; /* Чтобы не блокировала клики сквозь себя, если что */
+            pointer-events: none;
         }
 
-        #startScreen img { 
-            width: 90%; 
-            height: 80%; 
-            object-fit: contain; /* Чтобы логотип не обрезался и был виден целиком */
-        }
+        #startScreen img { width: 90%; height: 80%; object-fit: contain; }
 
         .info-label {
             position: absolute; bottom: 30px;
@@ -113,6 +108,7 @@
     
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')">✥</button>
+        <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
         <button id="drawBtn" class="active-tool" onclick="setTool('draw')">↗️</button>
         <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
         <div style="flex:1; display:flex; justify-content:center;">
@@ -144,7 +140,9 @@
     let bgImage = new Image();
     let currentTool = 'draw';
     let shapes = [];
+    let freeLines = [];
     let currentShape = null;
+    let currentLine = null;
 
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
@@ -156,23 +154,21 @@
     function setTool(tool) {
         currentTool = tool;
         document.getElementById('drawBtn').classList.toggle('active-tool', tool === 'draw');
+        document.getElementById('pencilBtn').classList.toggle('active-tool', tool === 'pencil');
         document.getElementById('eraseBtn').classList.toggle('active-tool', tool === 'erase');
         document.getElementById('moveBtn').classList.toggle('active-tool', tool === 'move');
     }
 
     function loadMap(url) {
         if (!url) return;
-        
         startScreen.style.opacity = '0';
-        setTimeout(() => { 
-            startScreen.style.display = 'none'; 
-        }, 500);
-
+        setTimeout(() => { startScreen.style.display = 'none'; }, 500);
         bgImage.src = url;
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = bgImage.height;
             shapes = [];
+            freeLines = [];
             resetView();
         };
     }
@@ -194,8 +190,28 @@
         bgCtx.drawImage(bgImage, 0, 0);
         
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        
+        freeLines.forEach(line => {
+            drawCtx.beginPath();
+            drawCtx.strokeStyle = line.color;
+            drawCtx.lineWidth = 6 / scale;
+            drawCtx.lineCap = 'round';
+            drawCtx.moveTo(line.points[0].x, line.points[0].y);
+            line.points.forEach(p => drawCtx.lineTo(p.x, p.y));
+            drawCtx.stroke();
+        });
+
         shapes.forEach(drawArrow);
         if (currentShape) drawArrow(currentShape);
+        
+        if (currentLine) {
+            drawCtx.beginPath();
+            drawCtx.strokeStyle = currentLine.color;
+            drawCtx.lineWidth = 6 / scale;
+            drawCtx.moveTo(currentLine.points[0].x, currentLine.points[0].y);
+            currentLine.points.forEach(p => drawCtx.lineTo(p.x, p.y));
+            drawCtx.stroke();
+        }
         
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
@@ -206,11 +222,16 @@
         drawCtx.strokeStyle = s.color;
         drawCtx.fillStyle = s.color;
         
+        // Рисуем кривую Безье вместо прямой
         drawCtx.moveTo(s.x1, s.y1);
-        drawCtx.lineTo(s.x2, s.y2);
+        // Используем среднюю точку для создания изгиба
+        const cpX = (s.x1 + s.x2) / 2 + (s.y2 - s.y1) * 0.2; 
+        const cpY = (s.y1 + s.y2) / 2 - (s.x2 - s.x1) * 0.2;
+        drawCtx.quadraticCurveTo(cpX, cpY, s.x2, s.y2);
         drawCtx.stroke();
 
-        const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+        // Острие (угол рассчитывается по касательной в конечной точке)
+        const angle = Math.atan2(s.y2 - cpY, s.x2 - cpX);
         const headLen = 20 / scale;
         drawCtx.beginPath();
         drawCtx.moveTo(s.x2, s.y2);
@@ -242,17 +263,26 @@
     });
 
     viewport.addEventListener('pointerdown', (e) => {
-        if (currentTool !== 'draw' || (e.pointerType === 'touch' && !e.isPrimary)) return;
+        if (e.pointerType === 'touch' && !e.isPrimary) return;
         const p = getCoords(e);
-        currentShape = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '' };
+        
+        if (currentTool === 'draw') {
+            currentShape = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '' };
+        } else if (currentTool === 'pencil') {
+            currentLine = { points: [p], color: document.getElementById('colorPicker').value };
+        }
     });
 
     viewport.addEventListener('pointermove', (e) => {
-        if (!currentShape) return;
         const p = getCoords(e);
-        currentShape.x2 = p.x;
-        currentShape.y2 = p.y;
-        redraw();
+        if (currentShape) {
+            currentShape.x2 = p.x;
+            currentShape.y2 = p.y;
+            redraw();
+        } else if (currentLine) {
+            currentLine.points.push(p);
+            redraw();
+        }
     });
 
     window.addEventListener('pointerup', () => {
@@ -263,8 +293,11 @@
                 shapes.push(currentShape);
             }
             currentShape = null;
-            redraw();
+        } else if (currentLine) {
+            freeLines.push(currentLine);
+            currentLine = null;
         }
+        redraw();
     });
 
     function getCoords(e) {
@@ -272,8 +305,19 @@
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
-    function undo() { shapes.pop(); redraw(); }
-    function clearAll() { if(confirm("Очистить?")) { shapes = []; redraw(); } }
+    function undo() { 
+        if (currentTool === 'draw') shapes.pop(); 
+        else freeLines.pop(); 
+        redraw(); 
+    }
+    
+    function clearAll() { 
+        if(confirm("Очистить все?")) { 
+            shapes = []; 
+            freeLines = []; 
+            redraw(); 
+        } 
+    }
 
     function saveImage() {
         const temp = document.createElement('canvas');
