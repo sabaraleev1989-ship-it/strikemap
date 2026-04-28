@@ -20,7 +20,6 @@
             overflow: hidden; display: flex; flex-direction: column; height: 100vh;
         }
 
-        /* Двухрядная панель */
         .toolbar {
             background: var(--panel-bg);
             display: flex;
@@ -34,7 +33,7 @@
             justify-content: space-around;
             align-items: center;
             padding: 8px 5px;
-            gap: 5px;
+            gap: 8px;
         }
 
         .tool-row:first-child { border-bottom: 1px solid #2a2d3e; }
@@ -45,13 +44,13 @@
             color: white;
             padding: 12px;
             border-radius: 12px;
-            font-size: 22px; /* Крупные иконки */
+            font-size: 24px;
             cursor: pointer;
             flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 55px;
+            min-height: 60px;
         }
 
         select { font-size: 16px; flex: 2; }
@@ -59,7 +58,7 @@
         .active-tool {
             border-color: var(--accent);
             background: rgba(255, 159, 10, 0.3);
-            box-shadow: 0 0 12px var(--accent);
+            box-shadow: 0 0 15px var(--accent);
         }
 
         #viewport {
@@ -70,27 +69,27 @@
         }
 
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        #bgCanvas { z-index: 1; }
-        #drawCanvas { z-index: 2; }
+        #bgCanvas { z-index: 1; pointer-events: none; }
+        #drawCanvas { z-index: 2; pointer-events: none; }
 
-        /* Главный экран / Логотип */
         #startScreen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-dark);
-            z-index: 50;
+            z-index: 150;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
+            transition: opacity 0.5s ease;
         }
 
-        #startScreen img { max-width: 80%; max-height: 70%; object-fit: contain; }
+        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
 
         .status-bar {
             position: absolute; bottom: 15px; left: 50%;
             transform: translateX(-50%); background: rgba(0,0,0,0.7);
-            padding: 5px 15px; border-radius: 20px; font-size: 12px;
+            padding: 5px 15px; border-radius: 20px; font-size: 14px;
             z-index: 10; border: 1px solid #444; pointer-events: none;
         }
     </style>
@@ -98,28 +97,28 @@
 <body>
 
 <div id="startScreen">
-    <img src="logo3.png" alt="Scorpion Logo">
-    <p>Выберите полигон в меню сверху</p>
+    <img src="logo3.png" alt="Scorpion Gen 2.0">
+    <p style="position: absolute; bottom: 40px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 20px; border: 1px solid var(--accent);">Выберите полигон</p>
 </div>
 
 <div class="toolbar">
     <div class="tool-row">
         <select id="mapPresets" onchange="loadMap(this.value)">
-            <option value="">🗺️ Выбрать полигон</option>
+            <option value="">🗺️ Полигоны</option>
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
-        <button onclick="undo()" title="Назад">↩️</button>
-        <button onclick="saveImage()" style="color: var(--success)" title="Сохранить">💾</button>
-        <button onclick="clearAll()" style="color: var(--danger)" title="Очистить">🗑️</button>
+        <button onclick="undo()">↩️</button>
+        <button onclick="saveImage()" style="color: var(--success)">💾</button>
+        <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
     </div>
     
     <div class="tool-row">
-        <button id="moveBtn" onclick="setTool('move')" title="Двигать карту">✥</button>
-        <button id="drawBtn" class="active-tool" onclick="setTool('draw')" title="Карандаш">✏️</button>
-        <button id="eraseBtn" onclick="setTool('erase')" title="Ластик">🧽</button>
-        <div style="background: #2c2e43; border-radius: 12px; padding: 5px; display: flex; align-items: center; border: 1px solid #444;">
-            <input type="color" id="colorPicker" value="#32d74b" style="width: 45px; height: 45px; border: none; background: none; cursor: pointer;">
+        <button id="moveBtn" onclick="setTool('move')">✥</button>
+        <button id="drawBtn" class="active-tool" onclick="setTool('draw')">↗️</button>
+        <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
+        <div style="flex:1; display:flex; justify-content:center;">
+            <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;">
         </div>
     </div>
 </div>
@@ -141,7 +140,9 @@
 
     let bgImage = new Image();
     let currentTool = 'draw';
-    let history = [];
+    let shapes = []; // Храним все стрелки как объекты
+    let currentShape = null;
+
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
 
@@ -158,21 +159,15 @@
 
     function loadMap(url) {
         if (!url) return;
-        startScreen.style.display = 'none'; // Убираем логотип
+        startScreen.style.opacity = '0';
+        setTimeout(() => { startScreen.style.display = 'none'; }, 500);
         bgImage.src = url;
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = bgImage.height;
-            history = [];
+            shapes = [];
             resetView();
         };
-    }
-
-    function updateTransform() {
-        const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        bgCanvas.style.transform = drawCanvas.style.transform = tr;
-        bgCtx.drawImage(bgImage, 0, 0);
-        zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
 
     function resetView() {
@@ -181,79 +176,99 @@
         scale = (mRatio > sRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
         posX = (viewport.clientWidth - bgImage.width * scale) / 2;
         posY = (viewport.clientHeight - bgImage.height * scale) / 2;
-        updateTransform();
+        redraw();
     }
 
-    mc.on("pinchstart panstart", (e) => {
-        if (currentTool !== 'move' && e.pointers.length < 2) return;
-        lastScale = scale; lastPosX = posX; lastPosY = posY;
-    });
+    function redraw() {
+        const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
+        bgCanvas.style.transform = drawCanvas.style.transform = tr;
+        
+        bgCtx.drawImage(bgImage, 0, 0);
+        
+        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        shapes.forEach(drawArrow);
+        if (currentShape) drawArrow(currentShape);
+        
+        zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
+    }
+
+    function drawArrow(s) {
+        drawCtx.beginPath();
+        drawCtx.lineWidth = 6 / scale;
+        drawCtx.strokeStyle = s.color;
+        drawCtx.fillStyle = s.color;
+        
+        // Линия
+        drawCtx.moveTo(s.x1, s.y1);
+        drawCtx.lineTo(s.x2, s.y2);
+        drawCtx.stroke();
+
+        // Острие
+        const angle = Math.atan2(s.y2 - s.y1, s.x2 - s.x1);
+        const headLen = 20 / scale;
+        drawCtx.beginPath();
+        drawCtx.moveTo(s.x2, s.y2);
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI / 6), s.y2 - headLen * Math.sin(angle - Math.PI / 6));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI / 6), s.y2 - headLen * Math.sin(angle + Math.PI / 6));
+        drawCtx.closePath();
+        drawCtx.fill();
+
+        // Текст (Позывной)
+        if (s.label) {
+            drawCtx.font = `bold ${24/scale}px Arial`;
+            drawCtx.shadowBlur = 4;
+            drawCtx.shadowColor = "black";
+            drawCtx.fillText(s.label, s.x2 + 10/scale, s.y2);
+            drawCtx.shadowBlur = 0;
+        }
+    }
 
     mc.on("pinchmove panmove", (e) => {
         if (currentTool === 'move' || e.pointers.length >= 2) {
             if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
             posX = lastPosX + e.deltaX;
             posY = lastPosY + e.deltaY;
-            updateTransform();
+            redraw();
         }
     });
 
-    let isDrawing = false;
+    mc.on("pinchstart panstart", (e) => {
+        lastScale = scale; lastPosX = posX; lastPosY = posY;
+    });
+
     viewport.addEventListener('pointerdown', (e) => {
-        if (currentTool === 'move' || (e.pointerType === 'touch' && !e.isPrimary)) return;
-        isDrawing = true;
-        saveState();
+        if (currentTool !== 'draw' || (e.pointerType === 'touch' && !e.isPrimary)) return;
         const p = getCoords(e);
-        drawCtx.beginPath();
-        drawCtx.moveTo(p.x, p.y);
+        currentShape = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '' };
     });
 
     viewport.addEventListener('pointermove', (e) => {
-        if (!isDrawing || currentTool === 'move' || (e.pointerType === 'touch' && !e.isPrimary)) return;
+        if (!currentShape) return;
         const p = getCoords(e);
-        drawCtx.lineCap = 'round';
-        drawCtx.lineJoin = 'round';
-        if (currentTool === 'erase') {
-            drawCtx.globalCompositeOperation = 'destination-out';
-            drawCtx.lineWidth = 40 / scale;
-        } else {
-            drawCtx.globalCompositeOperation = 'source-over';
-            drawCtx.strokeStyle = document.getElementById('colorPicker').value;
-            drawCtx.lineWidth = 6 / scale;
-        }
-        drawCtx.lineTo(p.x, p.y);
-        drawCtx.stroke();
+        currentShape.x2 = p.x;
+        currentShape.y2 = p.y;
+        redraw();
     });
 
-    window.addEventListener('pointerup', () => isDrawing = false);
+    window.addEventListener('pointerup', () => {
+        if (currentShape) {
+            const callsign = prompt("Введите позывной для этой стрелки:", "");
+            if (callsign !== null) {
+                currentShape.label = callsign.toUpperCase();
+                shapes.push(currentShape);
+            }
+            currentShape = null;
+            redraw();
+        }
+    });
 
     function getCoords(e) {
         const rect = viewport.getBoundingClientRect();
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
-    function saveState() {
-        if (history.length > 20) history.shift();
-        history.push(drawCanvas.toDataURL());
-    }
-
-    function undo() {
-        if (history.length === 0) return;
-        const img = new Image();
-        img.src = history.pop();
-        img.onload = () => {
-            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-            drawCtx.globalCompositeOperation = 'source-over';
-            drawCtx.drawImage(img, 0, 0);
-        };
-    }
-
-    function clearAll() {
-        if(confirm("Стереть рисунки?")) {
-            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-            history = [];
-        }
-    }
+    function undo() { shapes.pop(); redraw(); }
+    function clearAll() { if(confirm("Очистить карту?")) { shapes = []; redraw(); } }
 
     function saveImage() {
         const temp = document.createElement('canvas');
@@ -262,7 +277,7 @@
         tCtx.drawImage(bgCanvas, 0, 0);
         tCtx.drawImage(drawCanvas, 0, 0);
         const link = document.createElement('a');
-        link.download = 'tactical-map.png';
+        link.download = 'tactical-plan.png';
         link.href = temp.toDataURL();
         link.click();
     }
