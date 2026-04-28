@@ -50,7 +50,7 @@
             min-height: 60px;
         }
 
-        select { font-size: 16px; flex: 2; }
+        select { font-size: 16px; flex: 1.5; } /* Уменьшил ширину селектора */
 
         .active-tool {
             border-color: var(--accent);
@@ -94,7 +94,7 @@
 <div class="toolbar">
     <div class="tool-row">
         <select id="mapPresets" onchange="loadMap(this.value)">
-            <option value="">🗺️ ВЫБРАТЬ ПОЛИГОН</option>
+            <option value="">🗺️ ПОЛИГОН</option>
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
@@ -119,7 +119,6 @@
     <div id="startScreen">
         <img src="logo3.png" alt="Scorpion Splash">
     </div>
-
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
     <div class="status-bar" id="zoomVal">Масштаб: 100%</div>
@@ -136,11 +135,8 @@
 
     let bgImage = new Image();
     let currentTool = 'draw';
-    
-    // История действий
     let history = []; 
     let redoStack = [];
-
     let currentShape = null;
     let currentLine = null;
 
@@ -166,8 +162,7 @@
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = bgImage.height;
-            history = [];
-            redoStack = [];
+            history = []; redoStack = [];
             resetView();
         };
     }
@@ -184,28 +179,27 @@
     function redraw() {
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
         bgCanvas.style.transform = drawCanvas.style.transform = tr;
-        
         bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
-        if (bgImage.complete && bgImage.src) bgCtx.drawImage(bgImage, 0, 0);
-        
+        if (bgImage.src) bgCtx.drawImage(bgImage, 0, 0);
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         
         history.forEach(item => {
             if (item.type === 'pencil') drawFreeLine(item);
-            else if (item.type === 'arrow') drawArrow(item);
+            else drawArrow(item);
         });
 
         if (currentShape) drawArrow(currentShape);
         if (currentLine) drawFreeLine(currentLine);
-        
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
 
     function drawFreeLine(line) {
+        if (!line.points.length) return;
         drawCtx.beginPath();
         drawCtx.strokeStyle = line.color;
         drawCtx.lineWidth = 6 / scale;
         drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
         drawCtx.moveTo(line.points[0].x, line.points[0].y);
         line.points.forEach(p => drawCtx.lineTo(p.x, p.y));
         drawCtx.stroke();
@@ -226,20 +220,20 @@
         drawCtx.stroke();
 
         const angle = Math.atan2(s.y2 - cpY, s.x2 - cpX);
-        const headLen = 20 / scale;
+        const headLen = 22 / scale;
         drawCtx.beginPath();
         drawCtx.moveTo(s.x2, s.y2);
         drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/6), s.y2 - headLen * Math.sin(angle - Math.PI/6));
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/HeadLen), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/6), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.closePath();
         drawCtx.fill();
 
         if (s.label) {
-            drawCtx.font = `bold ${22/scale}px Arial`;
+            drawCtx.font = `bold ${24/scale}px Arial`;
+            drawCtx.textAlign = "center";
             drawCtx.shadowColor = "black";
             drawCtx.shadowBlur = 5;
-            drawCtx.fillText(s.label, s.x2 + 10/scale, s.y2);
+            drawCtx.fillText(s.label, s.x2, s.y2 - 20/scale);
             drawCtx.shadowBlur = 0;
         }
     }
@@ -263,7 +257,6 @@
         if (e.pointerType === 'touch' && !e.isPrimary) return;
         const p = getCoords(e);
         startX = e.clientX; startY = e.clientY;
-        
         if (currentTool === 'draw') {
             currentShape = { type: 'arrow', x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '', bend: 0.2 };
         } else if (currentTool === 'pencil') {
@@ -272,31 +265,29 @@
     });
 
     viewport.addEventListener('pointermove', (e) => {
+        if (!currentShape && !currentLine) return;
         const p = getCoords(e);
         if (currentShape) {
-            currentShape.x2 = p.x;
-            currentShape.y2 = p.y;
-            const dx = e.clientX - startX;
-            currentShape.bend = (dx * 0.001); 
-            redraw();
+            currentShape.x2 = p.x; currentShape.y2 = p.y;
+            currentShape.bend = (e.clientX - startX) * 0.001; 
         } else if (currentLine) {
             currentLine.points.push(p);
-            redraw();
         }
+        redraw();
     });
 
     window.addEventListener('pointerup', () => {
         if (currentShape) {
-            const callsign = prompt("Позывной (пусто = без надписи):");
+            const callsign = prompt("Позывной:");
             if (callsign !== null) {
                 currentShape.label = callsign.trim().toUpperCase();
                 history.push(currentShape);
-                redoStack = []; // Очищаем redo при новом действии
+                redoStack = [];
             }
             currentShape = null;
         } else if (currentLine) {
             history.push(currentLine);
-            redoStack = []; // Очищаем redo при новом действии
+            redoStack = [];
             currentLine = null;
         }
         redraw();
@@ -307,27 +298,9 @@
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
-    function undo() { 
-        if (history.length > 0) {
-            redoStack.push(history.pop());
-            redraw();
-        }
-    }
-
-    function redo() {
-        if (redoStack.length > 0) {
-            history.push(redoStack.pop());
-            redraw();
-        }
-    }
-    
-    function clearAll() { 
-        if(confirm("Очистить всё?")) { 
-            history = []; 
-            redoStack = []; 
-            redraw(); 
-        } 
-    }
+    function undo() { if (history.length) { redoStack.push(history.pop()); redraw(); } }
+    function redo() { if (redoStack.length) { history.push(redoStack.pop()); redraw(); } }
+    function clearAll() { if(confirm("Очистить?")) { history = []; redoStack = []; redraw(); } }
 
     function saveImage() {
         const temp = document.createElement('canvas');
@@ -343,9 +316,7 @@
 
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js')
-                .then(reg => console.log('SW зарегистрирован'))
-                .catch(err => console.log('Ошибка SW:', err));
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log(err));
         });
     }
 </script>
