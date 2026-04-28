@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical Board</title>
+    <title>Scorpion Tactical App</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root {
@@ -20,92 +20,108 @@
             overflow: hidden; display: flex; flex-direction: column; height: 100vh;
         }
 
+        /* Двухрядная панель */
         .toolbar {
             background: var(--panel-bg);
-            padding: 10px;
             display: flex;
-            gap: 8px;
-            align-items: center;
-            justify-content: center;
+            flex-direction: column;
             border-bottom: 2px solid #333;
             z-index: 100;
         }
+
+        .tool-row {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 8px 5px;
+            gap: 5px;
+        }
+
+        .tool-row:first-child { border-bottom: 1px solid #2a2d3e; }
 
         select, button {
             background: #2c2e43;
             border: 1px solid #444;
             color: white;
-            padding: 14px;
-            border-radius: 10px;
-            font-size: 20px;
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 22px; /* Крупные иконки */
             cursor: pointer;
+            flex: 1;
             display: flex;
             align-items: center;
             justify-content: center;
-            min-width: 50px;
-            transition: 0.2s;
+            min-height: 55px;
         }
 
-        button:active { background: #3d3f5a; transform: scale(0.95); }
-        
+        select { font-size: 16px; flex: 2; }
+
         .active-tool {
             border-color: var(--accent);
             background: rgba(255, 159, 10, 0.3);
-            box-shadow: 0 0 10px var(--accent);
+            box-shadow: 0 0 12px var(--accent);
         }
 
         #viewport {
             flex-grow: 1;
             position: relative;
-            overflow: hidden;
             background: #000;
             touch-action: none;
         }
 
-        canvas {
+        canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+        #bgCanvas { z-index: 1; }
+        #drawCanvas { z-index: 2; }
+
+        /* Главный экран / Логотип */
+        #startScreen {
             position: absolute;
-            top: 0; left: 0;
-            transform-origin: 0 0;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark);
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
-        #bgCanvas { z-index: 1; pointer-events: none; }
-        #drawCanvas { z-index: 2; pointer-events: none; }
+        #startScreen img { max-width: 80%; max-height: 70%; object-fit: contain; }
 
         .status-bar {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0,0,0,0.7);
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 14px;
-            z-index: 10;
-            border: 1px solid #444;
-            pointer-events: none;
+            position: absolute; bottom: 15px; left: 50%;
+            transform: translateX(-50%); background: rgba(0,0,0,0.7);
+            padding: 5px 15px; border-radius: 20px; font-size: 12px;
+            z-index: 10; border: 1px solid #444; pointer-events: none;
         }
     </style>
 </head>
 <body>
 
+<div id="startScreen">
+    <img src="logo3.png" alt="Scorpion Logo">
+    <p>Выберите полигон в меню сверху</p>
+</div>
+
 <div class="toolbar">
-    <select id="mapPresets" onchange="loadMap(this.value)" style="font-size: 16px;">
-        <option value="">🗺️ Карта</option>
-        <option value="logo1.png">99 Проблем</option>
-        <option value="logo2.png">Ахун</option>
-    </select>
-
-    <button id="moveBtn" onclick="setTool('move')" title="Переместить карту">✥</button>
+    <div class="tool-row">
+        <select id="mapPresets" onchange="loadMap(this.value)">
+            <option value="">🗺️ Выбрать полигон</option>
+            <option value="logo1.png">99 Проблем</option>
+            <option value="logo2.png">Ахун</option>
+        </select>
+        <button onclick="undo()" title="Назад">↩️</button>
+        <button onclick="saveImage()" style="color: var(--success)" title="Сохранить">💾</button>
+        <button onclick="clearAll()" style="color: var(--danger)" title="Очистить">🗑️</button>
+    </div>
     
-    <div style="width: 1px; height: 30px; background: #444; margin: 0 5px;"></div>
-
-    <input type="color" id="colorPicker" value="#32d74b" style="width: 45px; height: 45px; border: none; padding: 0; background: none; cursor: pointer;">
-    
-    <button id="drawBtn" class="active-tool" onclick="setTool('draw')">✏️</button>
-    <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
-    <button onclick="undo()">↩️</button>
-    <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
-    <button onclick="saveImage()" style="color: var(--success)">💾</button>
+    <div class="tool-row">
+        <button id="moveBtn" onclick="setTool('move')" title="Двигать карту">✥</button>
+        <button id="drawBtn" class="active-tool" onclick="setTool('draw')" title="Карандаш">✏️</button>
+        <button id="eraseBtn" onclick="setTool('erase')" title="Ластик">🧽</button>
+        <div style="background: #2c2e43; border-radius: 12px; padding: 5px; display: flex; align-items: center; border: 1px solid #444;">
+            <input type="color" id="colorPicker" value="#32d74b" style="width: 45px; height: 45px; border: none; background: none; cursor: pointer;">
+        </div>
+    </div>
 </div>
 
 <div id="viewport">
@@ -116,6 +132,7 @@
 
 <script>
     const viewport = document.getElementById('viewport');
+    const startScreen = document.getElementById('startScreen');
     const bgCanvas = document.getElementById('bgCanvas');
     const drawCanvas = document.getElementById('drawCanvas');
     const bgCtx = bgCanvas.getContext('2d');
@@ -123,13 +140,11 @@
     const zoomDisplay = document.getElementById('zoomVal');
 
     let bgImage = new Image();
-    let currentTool = 'draw'; // Режимы: 'draw', 'erase', 'move'
+    let currentTool = 'draw';
     let history = [];
-
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
-    
-    // Инициализация Hammer.js
+
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
@@ -139,13 +154,11 @@
         document.getElementById('drawBtn').classList.toggle('active-tool', tool === 'draw');
         document.getElementById('eraseBtn').classList.toggle('active-tool', tool === 'erase');
         document.getElementById('moveBtn').classList.toggle('active-tool', tool === 'move');
-        
-        // Меняем курсор для наглядности
-        viewport.style.cursor = tool === 'move' ? 'move' : 'crosshair';
     }
 
     function loadMap(url) {
         if (!url) return;
+        startScreen.style.display = 'none'; // Убираем логотип
         bgImage.src = url;
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
@@ -157,8 +170,7 @@
 
     function updateTransform() {
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        bgCanvas.style.transform = tr;
-        drawCanvas.style.transform = tr;
+        bgCanvas.style.transform = drawCanvas.style.transform = tr;
         bgCtx.drawImage(bgImage, 0, 0);
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
@@ -172,16 +184,12 @@
         updateTransform();
     }
 
-    // ЛОГИКА ЖЕСТОВ (Hammer.js)
     mc.on("pinchstart panstart", (e) => {
         if (currentTool !== 'move' && e.pointers.length < 2) return;
-        lastScale = scale;
-        lastPosX = posX;
-        lastPosY = posY;
+        lastScale = scale; lastPosX = posX; lastPosY = posY;
     });
 
     mc.on("pinchmove panmove", (e) => {
-        // Двигаем карту если включен режим перемещения ИЛИ если используется два пальца в любом режиме
         if (currentTool === 'move' || e.pointers.length >= 2) {
             if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
             posX = lastPosX + e.deltaX;
@@ -190,13 +198,9 @@
         }
     });
 
-    // ЛОГИКА РИСОВАНИЯ
     let isDrawing = false;
-
     viewport.addEventListener('pointerdown', (e) => {
-        if (currentTool === 'move') return; // В режиме перемещения не рисуем
-        if (e.pointerType === 'touch' && !e.isPrimary) return; // Только один палец рисует
-        
+        if (currentTool === 'move' || (e.pointerType === 'touch' && !e.isPrimary)) return;
         isDrawing = true;
         saveState();
         const p = getCoords(e);
@@ -206,11 +210,9 @@
 
     viewport.addEventListener('pointermove', (e) => {
         if (!isDrawing || currentTool === 'move' || (e.pointerType === 'touch' && !e.isPrimary)) return;
-        
         const p = getCoords(e);
         drawCtx.lineCap = 'round';
         drawCtx.lineJoin = 'round';
-        
         if (currentTool === 'erase') {
             drawCtx.globalCompositeOperation = 'destination-out';
             drawCtx.lineWidth = 40 / scale;
@@ -219,7 +221,6 @@
             drawCtx.strokeStyle = document.getElementById('colorPicker').value;
             drawCtx.lineWidth = 6 / scale;
         }
-        
         drawCtx.lineTo(p.x, p.y);
         drawCtx.stroke();
     });
@@ -228,14 +229,11 @@
 
     function getCoords(e) {
         const rect = viewport.getBoundingClientRect();
-        return {
-            x: (e.clientX - rect.left - posX) / scale,
-            y: (e.clientY - rect.top - posY) / scale
-        };
+        return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
     function saveState() {
-        if (history.length > 30) history.shift();
+        if (history.length > 20) history.shift();
         history.push(drawCanvas.toDataURL());
     }
 
@@ -251,7 +249,7 @@
     }
 
     function clearAll() {
-        if(confirm("Очистить все рисунки?")) {
+        if(confirm("Стереть рисунки?")) {
             drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
             history = [];
         }
