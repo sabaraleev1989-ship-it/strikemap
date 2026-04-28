@@ -147,10 +147,11 @@
 
     function setTool(tool) {
         currentTool = tool;
-        document.getElementById('drawBtn').classList.toggle('active-tool', tool === 'draw');
-        document.getElementById('pencilBtn').classList.toggle('active-tool', tool === 'pencil');
-        document.getElementById('eraseBtn').classList.toggle('active-tool', tool === 'erase');
-        document.getElementById('moveBtn').classList.toggle('active-tool', tool === 'move');
+        document.querySelectorAll('.tool-row button').forEach(btn => btn.classList.remove('active-tool'));
+        if(tool === 'draw') document.getElementById('drawBtn').classList.add('active-tool');
+        if(tool === 'pencil') document.getElementById('pencilBtn').classList.add('active-tool');
+        if(tool === 'erase') document.getElementById('eraseBtn').classList.add('active-tool');
+        if(tool === 'move') document.getElementById('moveBtn').classList.add('active-tool');
     }
 
     function loadMap(url) {
@@ -208,33 +209,35 @@
 
     function drawArrow(s) {
         drawCtx.beginPath();
-        drawCtx.lineWidth = 6 / scale;
+        drawCtx.lineWidth = 8 / scale;
         drawCtx.strokeStyle = s.color;
         drawCtx.fillStyle = s.color;
+        drawCtx.lineCap = 'round';
         
-        // Рисуем дугу
+        // Рисуем тело стрелки (кривую)
         drawCtx.moveTo(s.x1, s.y1);
         drawCtx.quadraticCurveTo(s.cpX, s.cpY, s.x2, s.y2);
         drawCtx.stroke();
 
-        // Угол наконечника
+        // РАСЧЕТ РОДНОГО НАКОНЕЧНИКА:
+        // Используем вектор от контрольной точки к концу стрелки для точности
         const angle = Math.atan2(s.y2 - s.cpY, s.x2 - s.cpX);
-        const headLen = 22 / scale;
+        const headLen = 25 / scale;
         
         drawCtx.beginPath();
         drawCtx.moveTo(s.x2, s.y2);
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/7), s.y2 - headLen * Math.sin(angle - Math.PI/7));
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/7), s.y2 - headLen * Math.sin(angle + Math.PI/7));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/6), s.y2 - headLen * Math.sin(angle - Math.PI/6));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/6), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.closePath();
         drawCtx.fill();
 
         if (s.label) {
             drawCtx.font = `bold ${24/scale}px Arial`;
             drawCtx.fillStyle = s.color;
-            drawCtx.strokeStyle = "black";
+            drawCtx.strokeStyle = "rgba(0,0,0,0.8)";
             drawCtx.lineWidth = 4 / scale;
-            drawCtx.strokeText(s.label, s.x2 + 10/scale, s.y2);
-            drawCtx.fillText(s.label, s.x2 + 10/scale, s.y2);
+            drawCtx.strokeText(s.label, s.x2 + 15/scale, s.y2);
+            drawCtx.fillText(s.label, s.x2 + 15/scale, s.y2);
         }
     }
 
@@ -255,6 +258,7 @@
         if (e.pointerType === 'touch' && !e.isPrimary) return;
         const p = getCoords(e);
         if (currentTool === 'draw') {
+            // При старте x1,y1 и x2,y2 в одной точке
             currentShape = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, cpX: p.x, cpY: p.y, color: document.getElementById('colorPicker').value, label: '' };
         } else if (currentTool === 'pencil') {
             currentLine = { points: [p], color: document.getElementById('colorPicker').value };
@@ -264,9 +268,11 @@
     viewport.addEventListener('pointermove', (e) => {
         const p = getCoords(e);
         if (currentShape) {
+            // x2,y2 - это конец стрелки
             currentShape.x2 = p.x;
             currentShape.y2 = p.y;
-            // Умный изгиб: контрольная точка следует за движением
+            // cpX, cpY - контрольная точка, которая создает изгиб. 
+            // Она следует за пальцем, пока вы не отпустите его.
             currentShape.cpX = p.x;
             currentShape.cpY = p.y;
             redraw();
@@ -278,7 +284,7 @@
 
     window.addEventListener('pointerup', () => {
         if (currentShape) {
-            const callsign = prompt("Позывной:");
+            const callsign = prompt("Позывной (пусто = без текста):");
             if (callsign !== null) {
                 currentShape.label = callsign.trim().toUpperCase();
                 shapes.push(currentShape);
@@ -302,7 +308,7 @@
     }
     
     function clearAll() { 
-        if(confirm("Очистить?")) { shapes = []; freeLines = []; redraw(); } 
+        if(confirm("Очистить карту?")) { shapes = []; freeLines = []; redraw(); } 
     }
 
     function saveImage() {
@@ -312,7 +318,7 @@
         tCtx.drawImage(bgCanvas, 0, 0);
         tCtx.drawImage(drawCanvas, 0, 0);
         const link = document.createElement('a');
-        link.download = 'tactical-map.png';
+        link.download = 'scorpion-map.png';
         link.href = temp.toDataURL();
         link.click();
     }
