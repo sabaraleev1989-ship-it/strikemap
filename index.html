@@ -20,34 +20,12 @@
             overflow: hidden; display: flex; flex-direction: column; height: 100vh;
         }
 
-        /* Заставка на весь экран */
-        #startScreen {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: var(--bg-dark);
-            z-index: 999; /* Поверх всего */
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.5s ease, visibility 0.5s;
-        }
-
-        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
-
-        #startScreen .info-btn {
-            position: absolute; bottom: 50px;
-            background: rgba(0,0,0,0.8);
-            padding: 15px 30px; border-radius: 30px;
-            border: 2px solid var(--accent);
-            font-weight: bold; text-transform: uppercase;
-        }
-
         .toolbar {
             background: var(--panel-bg);
             display: flex; flex-direction: column;
             border-bottom: 2px solid #333;
-            z-index: 100;
+            z-index: 2000; /* Самый высокий приоритет для кнопок */
+            position: relative;
         }
 
         .tool-row {
@@ -65,7 +43,7 @@
             min-height: 60px;
         }
 
-        select { font-size: 16px; flex: 2; z-index: 1001; }
+        select { font-size: 16px; flex: 2; }
 
         .active-tool {
             border-color: var(--accent);
@@ -76,6 +54,35 @@
         #viewport {
             flex-grow: 1; position: relative;
             background: #000; touch-action: none; overflow: hidden;
+            z-index: 1;
+        }
+
+        /* Исправленная заставка */
+        #startScreen {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg-dark);
+            z-index: 1000; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.5s ease;
+            pointer-events: none; /* Чтобы не блокировала клики сквозь себя, если что */
+        }
+
+        #startScreen img { 
+            width: 90%; 
+            height: 80%; 
+            object-fit: contain; /* Чтобы логотип не обрезался и был виден целиком */
+        }
+
+        .info-label {
+            position: absolute; bottom: 30px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px 20px; border-radius: 20px;
+            border: 1px solid var(--accent);
+            font-size: 14px;
         }
 
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -91,11 +98,6 @@
     </style>
 </head>
 <body>
-
-<div id="startScreen">
-    <img src="logo3.png" alt="Scorpion Gen 2.0">
-    <div class="info-btn">Выберите полигон в меню</div>
-</div>
 
 <div class="toolbar">
     <div class="tool-row">
@@ -120,6 +122,11 @@
 </div>
 
 <div id="viewport">
+    <div id="startScreen">
+        <img src="logo3.png" alt="Scorpion Gen 2.0">
+        <div class="info-label">ВЫБЕРИТЕ ПОЛИГОН В МЕНЮ</div>
+    </div>
+
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
     <div class="status-bar" id="zoomVal">Масштаб: 100%</div>
@@ -142,7 +149,6 @@
     let scale = 1, posX = 0, posY = 0;
     let lastScale = 1, lastPosX = 0, lastPosY = 0;
 
-    // Hammer.js
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
@@ -157,9 +163,10 @@
     function loadMap(url) {
         if (!url) return;
         
-        // Скрываем заставку
         startScreen.style.opacity = '0';
-        setTimeout(() => { startScreen.style.visibility = 'hidden'; }, 500);
+        setTimeout(() => { 
+            startScreen.style.display = 'none'; 
+        }, 500);
 
         bgImage.src = url;
         bgImage.onload = () => {
