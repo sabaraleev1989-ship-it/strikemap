@@ -30,7 +30,7 @@
             background: var(--panel-bg);
             display: flex; flex-direction: column;
             border-bottom: 2px solid #333;
-            z-index: 2000; /* Кнопки ВСЕГДА выше всего */
+            z-index: 2000;
             position: relative;
         }
 
@@ -63,12 +63,11 @@
             z-index: 1;
         }
 
-        /* Заставка, которая не закрывает кнопки */
         #startScreen {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg-dark);
-            z-index: 500; /* Ниже тулбара, но выше канваса */
+            z-index: 500;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -78,7 +77,7 @@
         #startScreen img { 
             width: 100%; 
             height: 100%; 
-            object-fit: cover; /* Заполняет экран полностью */
+            object-fit: cover; 
         }
 
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -161,10 +160,7 @@
 
     function loadMap(url) {
         if (!url) return;
-        
-        // Скрываем заставку только при выборе полигона
         startScreen.style.display = 'none';
-
         bgImage.src = url;
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = bgImage.width;
@@ -187,10 +183,8 @@
     function redraw() {
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
         bgCanvas.style.transform = drawCanvas.style.transform = tr;
-        
         bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
         bgCtx.drawImage(bgImage, 0, 0);
-        
         drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
         
         freeLines.forEach(line => {
@@ -214,7 +208,6 @@
             currentLine.points.forEach(p => drawCtx.lineTo(p.x, p.y));
             drawCtx.stroke();
         }
-        
         zoomDisplay.innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
 
@@ -224,20 +217,18 @@
         drawCtx.strokeStyle = s.color;
         drawCtx.fillStyle = s.color;
         
-        const bendFactor = s.bend || 0.2;
-        const cpX = (s.x1 + s.x2) / 2 - (s.y2 - s.y1) * bendFactor;
-        const cpY = (s.y1 + s.y2) / 2 + (s.x2 - s.x1) * bendFactor;
-
+        // Рисуем кривую с динамическим изгибом
         drawCtx.moveTo(s.x1, s.y1);
-        drawCtx.quadraticCurveTo(cpX, cpY, s.x2, s.y2);
+        drawCtx.quadraticCurveTo(s.cpX, s.cpY, s.x2, s.y2);
         drawCtx.stroke();
 
-        const angle = Math.atan2(s.y2 - cpY, s.x2 - cpX);
+        // Расчёт угла наконечника по вектору от контрольной точки к концу
+        const angle = Math.atan2(s.y2 - s.cpY, s.x2 - s.cpX);
         const headLen = 20 / scale;
         drawCtx.beginPath();
         drawCtx.moveTo(s.x2, s.y2);
         drawCtx.lineTo(s.x2 - headLen * Math.cos(angle - Math.PI/6), s.y2 - headLen * Math.sin(angle - Math.PI/6));
-        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/6), s.y2 - headLen * Math.sin(angle + Math.PI/6));
+        drawCtx.lineTo(s.x2 - headLen * Math.cos(angle + Math.PI/HeadLen), s.y2 - headLen * Math.sin(angle + Math.PI/6));
         drawCtx.closePath();
         drawCtx.fill();
 
@@ -263,15 +254,16 @@
         }
     });
 
-    let startX, startY;
-
     viewport.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'touch' && !e.isPrimary) return;
         const p = getCoords(e);
-        startX = e.clientX; startY = e.clientY;
-        
         if (currentTool === 'draw') {
-            currentShape = { x1: p.x, y1: p.y, x2: p.x, y2: p.y, color: document.getElementById('colorPicker').value, label: '', bend: 0.2 };
+            currentShape = { 
+                x1: p.x, y1: p.y, x2: p.x, y2: p.y, 
+                cpX: p.x, cpY: p.y, // Контрольная точка изгиба
+                color: document.getElementById('colorPicker').value, 
+                label: '' 
+            };
         } else if (currentTool === 'pencil') {
             currentLine = { points: [p], color: document.getElementById('colorPicker').value };
         }
@@ -282,8 +274,14 @@
         if (currentShape) {
             currentShape.x2 = p.x;
             currentShape.y2 = p.y;
-            const dx = e.clientX - startX;
-            currentShape.bend = (dx * 0.001); 
+            
+            // Динамический расчет точки изгиба (контрольная точка Безье)
+            // Она следует за движением пальца/курсора, создавая естественный поворот
+            currentShape.cpX = p.x;
+            currentShape.cpY = p.y;
+            
+            // Чтобы стрелка выглядела как дуга, а не ломаная, наконечник рисуется в x2,y2,
+            // но изгиб формируется положением курсора во время отрисовки.
             redraw();
         } else if (currentLine) {
             currentLine.points.push(p);
