@@ -34,21 +34,21 @@
         .modal-grid button { font-size: 26px; min-height: 60px; padding: 5px; color: #fff !important; }
         .active-shape { border-color: var(--success); background: rgba(50, 215, 75, 0.3); }
 
-        input[type="range"] { width: 100%; height: 50px; accent-color: var(--accent); }
-        #tacticSizeInput { accent-color: var(--success); }
-
-        #tacticPreview { min-height: 80px; display: flex; align-items: center; justify-content: center; }
-
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         #bgCanvas { z-index: 10; }
         #drawCanvas { z-index: 20; }
         #tempCanvas { z-index: 30; pointer-events: none; }
         
+        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; }
+        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
+        
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
 </head>
 <body>
+
+<div id="startScreen"><img src="logo3.png" alt="Scorpion Logo"></div>
 
 <div class="toolbar">
     <div class="tool-row">
@@ -67,33 +67,30 @@
         <button id="drawBtn" class="active-tool">↗️</button>
         <button id="tacticsBtn">🧽</button>
         <div style="flex:0.5; display:flex; justify-content:center;">
-            <input type="color" id="colorPicker" value="#32d74b" onchange="syncColor()" style="width:50px; height:50px; border:none; background:none; cursor:pointer;">
+            <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:50px; border:none; background:none;">
         </div>
     </div>
 </div>
 
 <div id="sizeModal">
-    <div style="font-weight: bold; color: var(--accent)">ТОЛЩИНА ЛИНИИ</div>
-    <div id="sizePreview" class="preview-circle"></div>
-    <input type="range" id="lineWidthInput" min="2" max="25" value="8" oninput="updatePreview(this.value)">
-    <button onclick="closeSizeModal()" style="width: 100%; min-height: 50px;">ГОТОВО</button>
+    <div style="font-weight: bold; color: var(--accent)">НАЧАЛЬНАЯ ТОЛЩИНА</div>
+    <input type="range" id="lineWidthInput" min="2" max="25" value="8">
+    <button onclick="document.getElementById('sizeModal').style.display='none'">ОК</button>
 </div>
 
 <div id="tacticsModal">
-    <div style="font-weight: bold; color: var(--success)">ТАКТИКА И ЦВЕТ</div>
-    <div id="tacticPreview"><canvas id="previewCanvas" width="100" height="100"></canvas></div>
+    <div style="font-weight: bold; color: var(--success)">ВЫБОР ЗНАКА</div>
     <div class="modal-grid">
-        <button id="shape_erase" onclick="selectTacticShape('erase')" class="active-shape">🧽</button>
-        <button id="shape_flag" onclick="selectTacticShape('flag')">🚩</button>
-        <button id="shape_circle" onclick="selectTacticShape('circle')">⭕</button>
-        <button id="shape_square" onclick="selectTacticShape('square')">⬛</button>
-        <button id="shape_skull" onclick="selectTacticShape('skull')">💀</button>
-        <button id="shape_boom" onclick="selectTacticShape('boom')">💥</button>
-        <button id="shape_shield" onclick="selectTacticShape('shield')">🛡️</button>
-        <button id="shape_star" onclick="selectTacticShape('star')">⭐</button>
+        <button onclick="selectTacticShape('erase')">🧽</button>
+        <button onclick="selectTacticShape('flag')">🚩</button>
+        <button onclick="selectTacticShape('circle')">⭕</button>
+        <button onclick="selectTacticShape('square')">⬛</button>
+        <button onclick="selectTacticShape('skull')">💀</button>
+        <button onclick="selectTacticShape('boom')">💥</button>
+        <button onclick="selectTacticShape('shield')">🛡️</button>
+        <button onclick="selectTacticShape('star')">⭐</button>
     </div>
-    <input type="range" id="tacticSizeInput" min="20" max="150" value="50" oninput="updateTacticPreview(this.value)">
-    <button onclick="closeTacticsModal()" style="width: 100%; min-height: 50px; background: var(--success);">ОК</button>
+    <button onclick="document.getElementById('tacticsModal').style.display='none'">ОК</button>
 </div>
 
 <div id="viewport">
@@ -105,83 +102,21 @@
 
 <script>
     const viewport = document.getElementById('viewport');
+    const startScreen = document.getElementById('startScreen');
     const bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
     const colorPicker = document.getElementById('colorPicker');
-    const previewCanvas = document.getElementById('previewCanvas'), pCtx = previewCanvas.getContext('2d');
 
-    let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false, startPoint = {x: 0, y: 0};
+    let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false;
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
+    
+    // Переменные для динамического изменения
     let globalLineWidth = 8, currentTacticShape = 'erase', currentTacticSize = 50;
+    let liveScale = 1; // Коэффициент изменения размера пальцами в реальном времени
 
     const shapesMap = { erase:'🧽', flag:'🚩', circle:'⭕', square:'⬛', skull:'💀', boom:'💥', shield:'🛡️', star:'⭐' };
 
-    function syncColor() {
-        if(sizeModal.style.display === 'flex') updatePreview(document.getElementById('lineWidthInput').value);
-        if(tacticsModal.style.display === 'flex') updateTacticPreview(document.getElementById('tacticSizeInput').value);
-    }
-
-    // РИСОВАНИЕ ТАКТИЧЕСКИХ ЗНАКОВ (ВЕКТОРНО)
-    function drawVectorShape(ctx, x, y, shape, color, size) {
-        ctx.save();
-        ctx.translate(x, y);
-        ctx.fillStyle = color;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = Math.max(2, size/12);
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-
-        const s = size / 2;
-
-        if (shape === 'flag') {
-            ctx.beginPath();
-            ctx.moveTo(-s*0.6, s); ctx.lineTo(-s*0.6, -s); // Флагшток
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(-s*0.6, -s); ctx.lineTo(s, -s/2); ctx.lineTo(-s*0.6, 0);
-            ctx.closePath(); ctx.fill();
-        } else if (shape === 'skull') {
-            ctx.beginPath();
-            ctx.arc(0, -s*0.2, s*0.7, Math.PI, 0); // Лоб
-            ctx.lineTo(s*0.4, s*0.6); ctx.lineTo(-s*0.4, s*0.6);
-            ctx.closePath(); ctx.fill();
-            ctx.fillStyle = '#000'; // Глаза
-            ctx.beginPath(); ctx.arc(-s*0.3, 0, s*0.2, 0, 7); ctx.fill();
-            ctx.beginPath(); ctx.arc(s*0.3, 0, s*0.2, 0, 7); ctx.fill();
-        } else if (shape === 'boom') {
-            ctx.beginPath();
-            for(let i=0; i<12; i++) {
-                let r = (i%2===0) ? s : s*0.4;
-                let a = (Math.PI*2/12)*i;
-                ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
-            }
-            ctx.closePath(); ctx.fill();
-        } else if (shape === 'shield') {
-            ctx.beginPath();
-            ctx.moveTo(-s, -s); ctx.lineTo(s, -s);
-            ctx.quadraticCurveTo(s, s*0.5, 0, s);
-            ctx.quadraticCurveTo(-s, s*0.5, -s, -s);
-            ctx.fill();
-        } else if (shape === 'star') {
-            ctx.beginPath();
-            for(let i=0; i<10; i++) {
-                let r = (i%2===0) ? s : s*0.4;
-                let a = (Math.PI*2/10)*i - Math.PI/2;
-                ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
-            }
-            ctx.closePath(); ctx.fill();
-        } else if (shape === 'circle') {
-            ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.stroke();
-        } else if (shape === 'square') {
-            ctx.strokeRect(-s, -s, size, size);
-        } else if (shape === 'erase') {
-            ctx.font = `${size}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('🧽', 0, 0);
-        }
-        ctx.restore();
-    }
-
-    // ИНТЕРФЕЙС
+    // ИНИЦИАЛИЗАЦИЯ ИНСТРУМЕНТОВ
     function setTool(tool) {
         currentTool = tool;
         ['drawBtn', 'pencilBtn', 'tacticsBtn', 'moveBtn'].forEach(id => {
@@ -190,48 +125,34 @@
         if (tool === 'tactics') document.getElementById('tacticsBtn').innerText = shapesMap[currentTacticShape];
     }
 
-    function openSizeModal() { document.getElementById('sizeModal').style.display = 'flex'; updatePreview(globalLineWidth); }
-    function closeSizeModal() { globalLineWidth = parseInt(document.getElementById('lineWidthInput').value); document.getElementById('sizeModal').style.display = 'none'; }
-    function updatePreview(val) {
-        document.getElementById('sizePreview').style.width = val + 'px';
-        document.getElementById('sizePreview').style.height = val + 'px';
-        document.getElementById('sizePreview').style.backgroundColor = colorPicker.value;
+    // ВЕКТОРНАЯ ОТРИСОВКА
+    function drawVectorShape(ctx, x, y, shape, color, size) {
+        ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(2, size/12); ctx.lineCap = 'round';
+        const s = size / 2;
+        if (shape === 'flag') {
+            ctx.beginPath(); ctx.moveTo(-s*0.6, s); ctx.lineTo(-s*0.6, -s); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(-s*0.6, -s); ctx.lineTo(s, -s/2); ctx.lineTo(-s*0.6, 0); ctx.closePath(); ctx.fill();
+        } else if (shape === 'skull') {
+            ctx.beginPath(); ctx.arc(0, -s*0.2, s*0.7, Math.PI, 0); ctx.lineTo(s*0.4, s*0.6); ctx.lineTo(-s*0.4, s*0.6); ctx.closePath(); ctx.fill();
+        } else if (shape === 'boom') {
+            ctx.beginPath(); for(let i=0; i<12; i++) { let r = (i%2===0)?s:s*0.4; let a = (Math.PI*2/12)*i; ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); } ctx.closePath(); ctx.fill();
+        } else if (shape === 'shield') {
+            ctx.beginPath(); ctx.moveTo(-s, -s); ctx.lineTo(s, -s); ctx.quadraticCurveTo(s, s*0.5, 0, s); ctx.quadraticCurveTo(-s, s*0.5, -s, -s); ctx.fill();
+        } else if (shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.stroke(); }
+        else if (shape === 'square') { ctx.strokeRect(-s, -s, size, size); }
+        ctx.restore();
     }
 
-    function openTacticsModal() { document.getElementById('tacticsModal').style.display = 'flex'; updateTacticPreview(currentTacticSize); }
-    function closeTacticsModal() { currentTacticSize = parseInt(document.getElementById('tacticSizeInput').value); document.getElementById('tacticsModal').style.display = 'none'; setTool('tactics'); }
-
-    function selectTacticShape(shape) {
-        currentTacticShape = shape;
-        document.querySelectorAll('.modal-grid button').forEach(b => b.classList.remove('active-shape'));
-        document.getElementById('shape_' + shape).classList.add('active-shape');
-        updateTacticPreview(document.getElementById('tacticSizeInput').value);
-    }
-
-    function updateTacticPreview(val) {
-        pCtx.clearRect(0, 0, 100, 100);
-        drawVectorShape(pCtx, 50, 50, currentTacticShape, colorPicker.value, val/1.5);
-    }
-
-    // HAMMER & КАНВАС (ОСНОВНОЕ)
-    [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
-        const h = new Hammer(btn); h.get('press').set({ time: 500 });
-        h.on('tap', () => setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'));
-        h.on('press', () => { setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'); openSizeModal(); });
-    });
-
-    const hTactics = new Hammer(document.getElementById('tacticsBtn'));
-    hTactics.get('press').set({ time: 500 });
-    hTactics.on('tap', () => setTool('tactics'));
-    hTactics.on('press', () => { setTool('tactics'); openTacticsModal(); });
-
+    // УПРАВЛЕНИЕ КАРТОЙ
     function loadMap(url) {
         if (!url) return;
+        startScreen.style.display = 'none';
         bgImage.src = url;
         bgImage.onload = () => {
             [bgCanvas, drawCanvas, tempCanvas].forEach(c => { c.width = bgImage.width; c.height = bgImage.height; });
             drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
-            history = []; resetView();
+            resetView();
         };
     }
 
@@ -257,31 +178,72 @@
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
+    // ЖЕСТЫ (HAMMER.JS)
+    const mc = new Hammer.Manager(viewport);
+    mc.add(new Hammer.Pinch());
+    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
+
+    mc.on("pinchstart", (e) => { 
+        lastScale = scale; 
+        liveScale = 1; 
+    });
+
+    mc.on("pinchmove", (e) => {
+        if (currentTool === 'move' || e.pointers.length >= 2) {
+            if (currentTool === 'move') {
+                scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
+                applyTransform();
+            } else {
+                // Изменение размера фигурки/стрелки в реальном времени
+                liveScale = e.scale;
+                updateTempLayer(e);
+            }
+        }
+    });
+
+    function updateTempLayer(e) {
+        if (!isDrawing) return;
+        const p = getCoords(e.pointers[0]);
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        const dynamicSize = (currentTool === 'tactics' ? currentTacticSize : globalLineWidth) * liveScale;
+        
+        if (currentTool === 'draw') {
+            const bend = (e.pointers[0].clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
+            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, '', bend, dynamicSize / scale);
+        } else if (currentTool === 'tactics' && currentTacticShape !== 'erase') {
+            drawVectorShape(tempCtx, startPoint.x, startPoint.y, currentTacticShape, colorPicker.value, dynamicSize / scale);
+        }
+    }
+
     viewport.addEventListener('pointerdown', (e) => {
         if (!bgImage.src || (e.pointerType === 'touch' && !e.isPrimary)) return;
         const p = getCoords(e);
-        if (currentTool === 'move') return;
-        isDrawing = true; startPoint = p; saveState();
+        if (currentTool === 'move') { lastPosX = posX; lastPosY = posY; return; }
+        
+        isDrawing = true; startPoint = p; liveScale = 1;
         if (currentTool === 'pencil' || (currentTool === 'tactics' && currentTacticShape === 'erase')) {
-            drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
+            saveState(); drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
         }
     });
 
     viewport.addEventListener('pointermove', (e) => {
-        if (!isDrawing) return;
+        if (currentTool === 'move' && e.buttons === 1) {
+            posX = lastPosX + e.movementX; posY = lastPosY + e.movementY;
+            applyTransform(); return;
+        }
+        if (!isDrawing || e.buttons !== 1) return;
         const p = getCoords(e);
-        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         if (currentTool === 'pencil') {
             drawCtx.lineWidth = globalLineWidth / scale; drawCtx.strokeStyle = colorPicker.value;
-            drawCtx.lineCap = 'round'; drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
+            drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
         } else if (currentTool === 'tactics' && currentTacticShape === 'erase') {
             drawCtx.globalCompositeOperation = 'destination-out';
-            drawCtx.lineWidth = currentTacticSize / scale; drawCtx.lineCap = 'round';
+            drawCtx.lineWidth = currentTacticSize / scale;
             drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
             drawCtx.globalCompositeOperation = 'source-over';
-        } else if (currentTool === 'draw') {
-            const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, '', bend, globalLineWidth / scale);
+        } else {
+            updateTempLayer({pointers: [e]});
         }
     });
 
@@ -289,16 +251,21 @@
         if (!isDrawing) return;
         isDrawing = false;
         const p = getCoords(e);
+        const finalSize = (currentTool === 'tactics' ? currentTacticSize : globalLineWidth) * liveScale;
+
         if (currentTool === 'draw') {
             const label = prompt("Позывной:");
+            saveState();
             const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, label, bend, globalLineWidth / scale);
-            tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, label, bend, finalSize / scale);
         } else if (currentTool === 'tactics' && currentTacticShape !== 'erase') {
-            drawVectorShape(drawCtx, p.x, p.y, currentTacticShape, colorPicker.value, currentTacticSize / scale);
+            saveState();
+            drawVectorShape(drawCtx, startPoint.x, startPoint.y, currentTacticShape, colorPicker.value, finalSize / scale);
         }
+        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
     });
 
+    // СТРЕЛКА
     function drawArrow(ctx, x1, y1, x2, y2, color, label, bend, width) {
         ctx.beginPath(); ctx.lineWidth = width; ctx.strokeStyle = color; ctx.fillStyle = color;
         const cpX = (x1 + x2) / 2 - (y2 - y1) * bend, cpY = (y1 + y2) / 2 + (x2 - x1) * bend;
@@ -311,27 +278,23 @@
         ctx.closePath(); ctx.fill();
         if (label) {
             ctx.save(); ctx.font = `bold ${24/scale}px Arial`; ctx.textAlign = "center";
-            ctx.shadowColor = "black"; ctx.shadowBlur = 5;
-            ctx.translate(cpX, cpY); ctx.rotate(Math.atan2(y2 - y1, x2 - x1));
+            ctx.translate(cpX, cpY); ctx.rotate(Math.atan2(y2-y1, x2-x1));
             ctx.fillText(label.toUpperCase(), 0, -(width + 12)); ctx.restore();
         }
     }
 
+    // LONG PRESS ДЛЯ ВЫЗОВА МЕНЮ
+    [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
+        new Hammer(btn).on('press', () => document.getElementById('sizeModal').style.display='flex');
+        btn.onclick = () => setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw');
+    });
+    new Hammer(document.getElementById('tacticsBtn')).on('press', () => document.getElementById('tacticsModal').style.display='flex');
+    document.getElementById('tacticsBtn').onclick = () => setTool('tactics');
+
+    function selectTacticShape(shape) { currentTacticShape = shape; setTool('tactics'); document.getElementById('tacticsModal').style.display='none'; }
     function saveState() { history.push(drawCanvas.toDataURL()); if (history.length > 20) history.shift(); redoStack = []; }
     function undo() { if (history.length) { redoStack.push(drawCanvas.toDataURL()); let img = new Image(); img.src = history.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
-    function redo() { if (redoStack.length) { history.push(drawCanvas.toDataURL()); let img = new Image(); img.src = redoStack.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
-
-    const mc = new Hammer.Manager(viewport);
-    mc.add(new Hammer.Pinch()); mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
-    mc.on("pinchmove panmove", (e) => {
-        if (currentTool === 'move' || e.pointers.length >= 2) {
-            if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
-            posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY; applyTransform();
-        }
-    });
-    mc.on("pinchstart panstart", () => { lastScale = scale; lastPosX = posX; lastPosY = posY; });
-
-    function clearAll() { if(confirm("Очистить всё?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
+    function clearAll() { if(confirm("Очистить?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
 </script>
 </body>
 </html>
