@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.16</title>
+    <title>Scorpion Tactical v.16.1</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
@@ -17,14 +17,24 @@
         #splash img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         .splash-content { position: relative; z-index: 10000; display: flex; flex-direction: column; align-items: center; transform: translateY(150px); }
         .loading-text { font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 10px #000; animation: blink 1.5s infinite; }
-        @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-        .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
-        .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
-        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; min-height: 45px; flex: 1; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
-        .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
+        .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 4px; }
+        .tool-row { display: flex; justify-content: space-between; gap: 4px; margin-bottom: 4px; align-items: center; }
         
-        #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
+        /* Уменьшенные кнопки для компактности */
+        button, select { 
+            background: #21262d; border: 1px solid #30363d; color: white; 
+            border-radius: 6px; font-size: 14px; min-height: 38px; 
+            flex: 1; display: flex; align-items: center; justify-content: center; 
+            touch-action: manipulation; padding: 2px;
+        }
+        
+        #mapPresets { flex: 2.5; font-size: 12px; } /* Карта чуть шире */
+        .btn-gear { flex: 0.8; font-size: 16px; } /* Шестеренка узкая */
+        .btn-action { flex: 0.8; } /* Кнопки undo/redo/del */
+
+        .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
+        #sizeSlider { flex: 2; height: 25px; accent-color: var(--accent); }
         
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
@@ -47,32 +57,38 @@
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
-        <button onclick="undo()">↩️</button>
-        <button onclick="redo()">↪️</button>
-        <button onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
+        
+        <button class="btn-gear" onclick="document.getElementById('fileInput').click()">⚙️</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="addNewMap(this)">
+        
+        <button class="btn-action" onclick="undo()">↩️</button>
+        <button class="btn-action" onclick="redo()">↪️</button>
+        <button class="btn-action" onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
+
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
         <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
         <button id="drawBtn" onclick="setTool('draw')">↗️</button>
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
     </div>
+
     <div class="tool-row">
         <input type="range" id="sizeSlider" min="10" max="100" value="40" oninput="updateObjSize(this.value)">
-        <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;" onchange="updateObjColor(this.value)">
+        <input type="color" id="colorPicker" value="#32d74b" style="width:40px; height:40px; border:none; background:none; padding:0;" onchange="updateObjColor(this.value)">
     </div>
 </div>
 
 <div id="tacticsModal" class="modal">
-    <button onclick="selectTacticShape('scorpion')">🦂</button>
-    <button onclick="selectTacticShape('octopus')">🐙</button>
+    <button onclick="selectTacticShape('scorpion')">Scorp</button>
+    <button onclick="selectTacticShape('octopus')">Octo</button>
     <button onclick="selectTacticShape('99')">99</button>
-    <button onclick="selectTacticShape('knight')">LEGION</button>
+    <button onclick="selectTacticShape('knight')">Legion</button>
     <button onclick="selectTacticShape('bsg')">BSG</button>
     <button onclick="selectTacticShape('flag')">🚩</button>
     <button onclick="selectTacticShape('skull')">💀</button>
     <button onclick="selectTacticShape('boom')">💥</button>
-    <button onclick="selectTacticShape('star')">☀️</button>
+    <button onclick="selectTacticShape('sun')">☀️</button>
 </div>
 
 <div id="viewport">
@@ -84,11 +100,12 @@
 
 <script>
     window.addEventListener('load', () => {
+        loadCustomMaps();
         setTimeout(() => {
             const s = document.getElementById('splash');
             s.style.opacity = '0';
             setTimeout(() => s.style.display = 'none', 800);
-        }, 2200);
+        }, 1500);
     });
 
     const viewport = document.getElementById('viewport'), 
@@ -100,6 +117,39 @@
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
+
+    function addNewMap(input) {
+        if (input.files && input.files[0]) {
+            const name = prompt("Название карты:", "Новая локация");
+            if (!name) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const url = e.target.result;
+                const select = document.getElementById('mapPresets');
+                const opt = document.createElement('option');
+                opt.value = url; opt.text = name;
+                select.appendChild(opt);
+                
+                let saved = JSON.parse(localStorage.getItem('st_maps') || '[]');
+                saved.push({name, url});
+                localStorage.setItem('st_maps', JSON.stringify(saved));
+                
+                select.value = url;
+                handleMapChange(url);
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function loadCustomMaps() {
+        const saved = JSON.parse(localStorage.getItem('st_maps') || '[]');
+        const select = document.getElementById('mapPresets');
+        saved.forEach(m => {
+            const opt = document.createElement('option');
+            opt.value = m.url; opt.text = m.name;
+            select.appendChild(opt);
+        });
+    }
 
     function handleMapChange(url) {
         if (!url) return;
@@ -124,11 +174,10 @@
     function setTool(t) {
         const modal = document.getElementById('tacticsModal');
         if (t === 'tactics') {
-            if (modal.style.display === 'grid') { modal.style.display = 'none'; return; }
-            modal.style.display = 'grid';
+            modal.style.display = modal.style.display === 'grid' ? 'none' : 'grid';
         } else { modal.style.display = 'none'; }
         currentTool = t;
-        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
+        document.querySelectorAll('.toolbar button').forEach(b => b.classList.remove('active-tool'));
         document.getElementById(t + 'Btn')?.classList.add('active-tool');
         if (t !== 'move') { selectedObj = null; render(); }
     }
@@ -154,23 +203,31 @@
     }
 
     function drawTactic(ctx, obj) {
-        // Карта фигур с добавленным солнцем
-        const map = { scorpion: '🦂', octopus: '🐙', '99': '99', knight: 'LEGION', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', star: '☀️' };
+        const map = { scorpion: '🦂', octopus: '🐙', '99': '99', knight: 'LEGION', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', sun: '☀️' };
         const content = map[obj.shape] || obj.shape;
-        ctx.fillStyle = obj.color; ctx.font = `bold ${obj.size * 2.5}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const displaySize = obj.size * 2.5;
         ctx.translate(obj.x, obj.y);
-        ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5;
-        if(['99', 'BSG', 'LEGION', '🚩'].includes(content)) {
-            ctx.strokeStyle = "black"; ctx.lineWidth = (obj.size * 2.5)/10;
-            ctx.strokeText(content, 0, 0); ctx.fillText(content, 0, 0);
-        } else { ctx.fillText(content, 0, 0); }
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `bold ${displaySize}px Arial`;
+        const isDyn = ['99', 'BSG', 'LEGION', '🚩'].includes(content);
+        if (isDyn) {
+            ctx.strokeStyle = "black"; ctx.lineWidth = displaySize / 10;
+            ctx.strokeText(content, 0, 0);
+            ctx.fillStyle = obj.color;
+            ctx.fillText(content, 0, 0);
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5;
+            ctx.fillStyle = "#fff";
+            ctx.fillText(content, 0, 0);
+        }
     }
 
     function drawArrow(ctx, obj) {
-        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/10;
+        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; 
+        ctx.lineWidth = obj.size / 10;
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
-        const headLen = obj.size/2.5; 
+        const headLen = obj.size / 2.5; 
         ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
         ctx.lineTo(obj.x2 - headLen * Math.cos(angle - 0.5), obj.y2 - headLen * Math.sin(angle - 0.5));
         ctx.lineTo(obj.x2 - headLen * Math.cos(angle + 0.5), obj.y2 - headLen * Math.sin(angle + 0.5));
@@ -259,7 +316,6 @@
 
     function saveState() { history.push(JSON.stringify(objects)); redoStack = []; }
     function undo() { if(history.length) { redoStack.push(JSON.stringify(objects)); objects = JSON.parse(history.pop()); render(); } }
-    // Реализация функции Вперед
     function redo() { if(redoStack.length) { history.push(JSON.stringify(objects)); objects = JSON.parse(redoStack.pop()); render(); } }
 </script>
 </body>
