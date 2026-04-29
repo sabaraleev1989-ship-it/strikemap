@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.14</title>
+    <title>Scorpion Tactical v.15</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        /* ПОЛНОЭКРАННАЯ ЗАСТАВКА */
         #splash {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 9999; display: flex; 
@@ -20,7 +19,6 @@
         .loading-text { font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 10px #000; animation: blink 1.5s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-        /* ИНТЕРФЕЙС */
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
         button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; min-height: 45px; flex: 1; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
@@ -28,7 +26,6 @@
         
         #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
         
-        /* МОДАЛЬНОЕ ОКНО ФИГУР */
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
@@ -61,7 +58,7 @@
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
     </div>
     <div class="tool-row">
-        <input type="range" id="sizeSlider" min="5" max="75" value="35" oninput="updateObjSize(this.value)">
+        <input type="range" id="sizeSlider" min="10" max="100" value="40" oninput="updateObjSize(this.value)">
         <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;" onchange="updateObjColor(this.value)">
     </div>
 </div>
@@ -86,13 +83,12 @@
 </div>
 
 <script>
-    // ИСЧЕЗНОВЕНИЕ ЗАСТАВКИ
     window.addEventListener('load', () => {
         setTimeout(() => {
             const s = document.getElementById('splash');
             s.style.opacity = '0';
             setTimeout(() => s.style.display = 'none', 800);
-        }, 2500);
+        }, 2200);
     });
 
     const viewport = document.getElementById('viewport'), 
@@ -125,30 +121,19 @@
         document.getElementById('zoomVal').innerText = `Зум: ${Math.round(scale * 100)}%`;
     }
 
-    // УПРАВЛЕНИЕ ОКНОМ ФИГУР (ТОГГЛ)
     function setTool(t) {
         const modal = document.getElementById('tacticsModal');
         if (t === 'tactics') {
-            if (modal.style.display === 'grid') {
-                modal.style.display = 'none';
-                return; 
-            }
+            if (modal.style.display === 'grid') { modal.style.display = 'none'; return; }
             modal.style.display = 'grid';
-        } else {
-            modal.style.display = 'none';
-        }
-
+        } else { modal.style.display = 'none'; }
         currentTool = t;
         document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
         document.getElementById(t + 'Btn')?.classList.add('active-tool');
         if (t !== 'move') { selectedObj = null; render(); }
     }
 
-    function selectTacticShape(s) { 
-        currentTacticShape = s; 
-        document.getElementById('tacticsModal').style.display = 'none'; 
-    }
-
+    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
     function updateObjSize(v) { if(selectedObj) { selectedObj.size = parseFloat(v); render(); } }
     function updateObjColor(v) { if(selectedObj) { selectedObj.color = v; render(); } }
 
@@ -158,7 +143,7 @@
             drawCtx.save();
             if(obj === selectedObj) {
                 drawCtx.strokeStyle = "rgba(255,255,255,0.8)"; drawCtx.lineWidth = 2/scale;
-                const r = (obj.size || 35) * 1.1;
+                const r = (obj.type === 'tactic' ? obj.size * 2.5 : obj.size) * 1.2;
                 drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
@@ -171,21 +156,31 @@
     function drawTactic(ctx, obj) {
         const map = { scorpion: '🦂', octopus: '🐙', '99': '99', knight: 'LEGION', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', star: '⭐' };
         const content = map[obj.shape] || obj.shape;
-        const isDyn = ['99', 'BSG', 'LEGION', '🚩'].includes(content);
+        
+        // УВЕЛИЧЕННЫЙ КОЭФФИЦИЕНТ ДЛЯ ФИГУРОК (в 2.5 раза больше стрелок)
+        const displaySize = obj.size * 2.5;
+        
         ctx.translate(obj.x, obj.y);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = `bold ${obj.size}px Arial`;
+        ctx.font = `bold ${displaySize}px Arial`;
+
+        // ПЕРЕКРАШИВАЕМЫЕ ЭЛЕМЕНТЫ (Флаг теперь здесь)
+        const isDyn = ['99', 'BSG', 'LEGION', '🚩'].includes(content);
+
         if (isDyn) {
-            ctx.strokeStyle = "black"; ctx.lineWidth = obj.size / 10; ctx.strokeText(content, 0, 0);
-            ctx.fillStyle = obj.color; ctx.fillText(content, 0, 0);
+            ctx.strokeStyle = "black"; ctx.lineWidth = displaySize / 10;
+            ctx.strokeText(content, 0, 0);
+            ctx.fillStyle = obj.color;
+            ctx.fillText(content, 0, 0);
         } else {
-            ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5; ctx.fillText(content, 0, 0);
+            ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5;
+            ctx.fillText(content, 0, 0);
         }
     }
 
     function drawArrow(ctx, obj) {
         ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; 
-        ctx.lineWidth = obj.size / 10; // Тонкие стрелки
+        ctx.lineWidth = obj.size / 10;
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
         const headLen = obj.size / 2.5; 
@@ -218,7 +213,10 @@
         if(!bgImage.src) return;
         const p = getCoords(e);
         if(currentTool === 'move') {
-            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 70/scale);
+            selectedObj = [...objects].reverse().find(o => {
+                const hit = o.type === 'tactic' ? o.size * 2 : 60;
+                return Math.hypot(o.x - p.x, o.y - p.y) < hit/scale;
+            });
             if(selectedObj) document.getElementById('sizeSlider').value = selectedObj.size;
             render(); return;
         }
