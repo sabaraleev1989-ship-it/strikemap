@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical PRO</title>
+    <title>Scorpion Tactical ELITE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg-dark: #0f111a; --panel-bg: #1a1c2c; --accent: #ff9f0a; --danger: #ff453a; --success: #32d74b; }
@@ -21,33 +21,25 @@
         
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.3); box-shadow: 0 0 15px var(--accent); }
 
-        /* Окно выбора толщины (для карандаша и стрелки) */
-        #sizeModal {
+        #sizeModal, #tacticsModal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: var(--panel-bg); border: 2px solid var(--accent); padding: 25px;
             border-radius: 25px; z-index: 3000; display: none; flex-direction: column;
             align-items: center; gap: 20px; box-shadow: 0 0 40px rgba(0,0,0,0.9);
-            width: 70%; max-width: 280px;
-        }
-        
-        /* Окно выбора фигур тактики (для ластика) */
-        #tacticsModal {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: var(--panel-bg); border: 2px solid var(--success); padding: 25px;
-            border-radius: 25px; z-index: 3001; display: none; flex-direction: column;
-            align-items: center; gap: 20px; box-shadow: 0 0 40px rgba(0,0,0,0.9);
             width: 85%; max-width: 320px;
         }
 
+        #tacticsModal { border-color: var(--success); }
+
         .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
-        .modal-grid button { font-size: 30px; min-height: 70px; }
+        .modal-grid button { font-size: 26px; min-height: 60px; padding: 5px; }
         .active-shape { border-color: var(--success); background: rgba(50, 215, 75, 0.3); }
 
         input[type="range"] { width: 100%; height: 50px; accent-color: var(--accent); }
         #tacticSizeInput { accent-color: var(--success); }
 
         .preview-circle { background: var(--accent); border-radius: 50%; }
-        #tacticPreview { background: none; display: flex; align-items: center; justify-content: center; font-size: 40px; }
+        #tacticPreview { background: none; display: flex; align-items: center; justify-content: center; min-height: 80px; }
 
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -79,7 +71,7 @@
         <button id="drawBtn" class="active-tool">↗️</button>
         <button id="tacticsBtn">🧽</button>
         <div style="flex:0.5; display:flex; justify-content:center;">
-            <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:50px; border:none; background:none;">
+            <input type="color" id="colorPicker" value="#32d74b" onchange="syncColor()" style="width:50px; height:50px; border:none; background:none;">
         </div>
     </div>
 </div>
@@ -92,16 +84,20 @@
 </div>
 
 <div id="tacticsModal">
-    <div style="font-weight: bold; color: var(--success)">ТАКТИЧЕСКИЕ ФИГУРЫ</div>
+    <div style="font-weight: bold; color: var(--success)">ТАКТИКА И ЦВЕТ</div>
     <div id="tacticPreview">🧽</div>
     <div class="modal-grid">
         <button id="shape_erase" onclick="selectTacticShape('erase')" class="active-shape">🧽</button>
         <button id="shape_flag" onclick="selectTacticShape('flag')">🚩</button>
         <button id="shape_circle" onclick="selectTacticShape('circle')">⭕</button>
         <button id="shape_square" onclick="selectTacticShape('square')">⬛</button>
+        <button id="shape_skull" onclick="selectTacticShape('skull')">💀</button>
+        <button id="shape_boom" onclick="selectTacticShape('boom')">💥</button>
+        <button id="shape_shield" onclick="selectTacticShape('shield')">🛡️</button>
+        <button id="shape_star" onclick="selectTacticShape('star')">⭐</button>
     </div>
-    <input type="range" id="tacticSizeInput" min="10" max="100" value="40" oninput="updateTacticPreview(this.value)">
-    <button onclick="closeTacticsModal()" style="width: 100%; min-height: 50px; background: var(--success); border-color: #28a745;">ОК</button>
+    <input type="range" id="tacticSizeInput" min="15" max="120" value="45" oninput="updateTacticPreview(this.value)">
+    <button onclick="closeTacticsModal()" style="width: 100%; min-height: 50px; background: var(--success);">ОК</button>
 </div>
 
 <div id="viewport">
@@ -120,18 +116,20 @@
     
     const sizeModal = document.getElementById('sizeModal'), sizeInput = document.getElementById('lineWidthInput'), sizePreview = document.getElementById('sizePreview');
     const tacticsModal = document.getElementById('tacticsModal'), tacticSizeInput = document.getElementById('tacticSizeInput'), tacticPreview = document.getElementById('tacticPreview');
-    const tacticsBtn = document.getElementById('tacticsBtn');
+    const colorPicker = document.getElementById('colorPicker');
 
     let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false, startPoint = {x: 0, y: 0};
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
     
-    let globalLineWidth = 8; // Толщина для рисования
-    let currentTacticShape = 'erase'; // Текущая фигура тактики
-    let currentTacticSize = 40; // Размер фигуры/ластика
+    let globalLineWidth = 8;
+    let currentTacticShape = 'erase';
+    let currentTacticSize = 45;
 
-    // НАСТРОЙКА КНОПОК
-    
-    // Карандаш и Стрелка (long press для размера)
+    const shapesMap = {
+        erase: '🧽', flag: '🚩', circle: '⭕', square: '⬛', 
+        skull: '💀', boom: '💥', shield: '🛡️', star: '⭐'
+    };
+
     [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
         const h = new Hammer(btn);
         h.get('press').set({ time: 500 });
@@ -139,8 +137,7 @@
         h.on('press', () => { setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'); openSizeModal(); });
     });
 
-    // Кнопка Тактики (бывший ластик)
-    const hTactics = new Hammer(tacticsBtn);
+    const hTactics = new Hammer(document.getElementById('tacticsBtn'));
     hTactics.get('press').set({ time: 500 });
     hTactics.on('tap', () => setTool('tactics'));
     hTactics.on('press', () => { setTool('tactics'); openTacticsModal(); });
@@ -155,62 +152,37 @@
             const b = document.getElementById(id);
             if(b) b.classList.toggle('active-tool', id.startsWith(tool));
         });
-        
-        // Обновляем иконку кнопки тактики
-        if (tool === 'tactics') {
-            const icons = { erase: '🧽', flag: '🚩', circle: '⭕', square: '⬛' };
-            tacticsBtn.innerText = icons[currentTacticShape];
-        } else {
-             tacticsBtn.innerText = '🧽'; // Дефолтная иконка, когда не активна
-        }
+        if (tool === 'tactics') document.getElementById('tacticsBtn').innerText = shapesMap[currentTacticShape];
     }
 
-    // УПРАВЛЕНИЕ МОДАЛКАМИ
-    
-    // Модалка 1 (Размер линий)
+    function syncColor() {
+        if(sizeModal.style.display === 'flex') updatePreview(sizeInput.value);
+        if(tacticsModal.style.display === 'flex') updateTacticPreview(tacticSizeInput.value);
+    }
+
     function openSizeModal() { sizeModal.style.display = 'flex'; updatePreview(globalLineWidth); }
     function closeSizeModal() { globalLineWidth = parseInt(sizeInput.value); sizeModal.style.display = 'none'; }
     function updatePreview(val) {
         sizePreview.style.width = val + 'px'; sizePreview.style.height = val + 'px';
-        sizePreview.style.backgroundColor = document.getElementById('colorPicker').value;
+        sizePreview.style.backgroundColor = colorPicker.value;
     }
 
-    // Модалка 2 (Фигуры тактики)
-    function openTacticsModal() {
-        tacticsModal.style.display = 'flex';
-        tacticSizeInput.value = currentTacticSize;
-        updateTacticPreview(currentTacticSize);
-    }
-    
-    function closeTacticsModal() {
-        currentTacticSize = parseInt(tacticSizeInput.value);
-        tacticsModal.style.display = 'none';
-        setTool('tactics'); // Активируем инструмент после настройки
-    }
+    function openTacticsModal() { tacticsModal.style.display = 'flex'; updateTacticPreview(currentTacticSize); }
+    function closeTacticsModal() { currentTacticSize = parseInt(tacticSizeInput.value); tacticsModal.style.display = 'none'; setTool('tactics'); }
 
     function selectTacticShape(shape) {
         currentTacticShape = shape;
-        // Обновляем активный класс в гриде
         document.querySelectorAll('.modal-grid button').forEach(b => b.classList.remove('active-shape'));
         document.getElementById('shape_' + shape).classList.add('active-shape');
         updateTacticPreview(tacticSizeInput.value);
     }
 
     function updateTacticPreview(val) {
-        const icons = { erase: '🧽', flag: '🚩', circle: '⭕', square: '⬛' };
-        tacticPreview.innerText = icons[currentTacticShape];
-        
-        if (currentTacticShape === 'erase') {
-            tacticPreview.style.fontSize = '40px';
-            tacticPreview.style.color = '#fff';
-        } else {
-            // Для фигур показываем размер и цвет
-            tacticPreview.style.fontSize = (val * 0.8) + 'px';
-            tacticPreview.style.color = document.getElementById('colorPicker').value;
-        }
+        tacticPreview.innerText = shapesMap[currentTacticShape];
+        tacticPreview.style.fontSize = (val * 0.8) + 'px';
+        tacticPreview.style.color = (currentTacticShape === 'erase') ? '#fff' : colorPicker.value;
     }
 
-    // РАБОТА С КАНВАСОМ
     function loadMap(url) {
         if (!url) { startScreen.style.visibility = 'visible'; return; }
         startScreen.style.visibility = 'hidden';
@@ -223,7 +195,6 @@
     }
 
     function resetView() {
-        if (!bgImage.src) return;
         const sRatio = viewport.clientWidth / viewport.clientHeight;
         const mRatio = bgImage.width / bgImage.height;
         scale = (mRatio > sRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
@@ -245,19 +216,13 @@
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
-    // ЛОГИКА РИСОВАНИЯ
     viewport.addEventListener('pointerdown', (e) => {
         if (!bgImage.src || (e.pointerType === 'touch' && !e.isPrimary)) return;
         const p = getCoords(e);
         if (currentTool === 'move') return;
-        
         isDrawing = true; startPoint = p; saveState();
-        
-        if (currentTool === 'pencil') {
+        if (currentTool === 'pencil' || (currentTool === 'tactics' && currentTacticShape === 'erase')) {
             drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
-        } else if (currentTool === 'tactics' && currentTacticShape === 'erase') {
-             // Режим ластика: начинаем путь стирания
-             drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
         }
     });
 
@@ -267,20 +232,16 @@
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         
         if (currentTool === 'pencil') {
-            drawCtx.lineWidth = globalLineWidth / scale; 
-            drawCtx.strokeStyle = document.getElementById('colorPicker').value;
+            drawCtx.lineWidth = globalLineWidth / scale; drawCtx.strokeStyle = colorPicker.value;
             drawCtx.lineCap = 'round'; drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
         } else if (currentTool === 'tactics' && currentTacticShape === 'erase') {
-            // Режим ластика: стираем "пиксели"
             drawCtx.globalCompositeOperation = 'destination-out';
-            drawCtx.lineWidth = currentTacticSize / scale; // Используем размер тактики для ластика
-            drawCtx.lineCap = 'round';
+            drawCtx.lineWidth = currentTacticSize / scale; drawCtx.lineCap = 'round';
             drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
-            drawCtx.globalCompositeOperation = 'source-over'; // Возвращаем обычный режим
+            drawCtx.globalCompositeOperation = 'source-over';
         } else if (currentTool === 'draw') {
-            // Предпросмотр стрелки
             const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, '', bend, globalLineWidth / scale);
+            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, '', bend, globalLineWidth / scale);
         }
     });
 
@@ -288,20 +249,16 @@
         if (!isDrawing) return;
         isDrawing = false;
         const p = getCoords(e);
-        
         if (currentTool === 'draw') {
-            // Фиксируем стрелку с позывным
             const label = prompt("Позывной:");
             const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, document.getElementById('colorPicker').value, label, bend, globalLineWidth / scale);
+            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, label, bend, globalLineWidth / scale);
             tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         } else if (currentTool === 'tactics' && currentTacticShape !== 'erase') {
-            // Фиксируем фигуру тактики (нажатие без перетаскивания)
-            drawTacticShape(drawCtx, p.x, p.y, currentTacticShape, document.getElementById('colorPicker').value, currentTacticSize / scale);
+            drawTacticShape(drawCtx, p.x, p.y, currentTacticShape, colorPicker.value, currentTacticSize / scale);
         }
     });
 
-    // Отрисовка стрелки (векторная кривая)
     function drawArrow(ctx, x1, y1, x2, y2, color, label, bend, width) {
         ctx.beginPath(); ctx.lineWidth = width; ctx.strokeStyle = color; ctx.fillStyle = color;
         const cpX = (x1 + x2) / 2 - (y2 - y1) * bend, cpY = (y1 + y2) / 2 + (x2 - x1) * bend;
@@ -320,37 +277,24 @@
         }
     }
     
-    // Отрисовка тактической фигуры (растр на холсте)
     function drawTacticShape(ctx, x, y, shape, color, size) {
         ctx.save();
-        ctx.fillStyle = color;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4 / scale; // Фиксированная толщина обводки для круга/квадрата
-
-        if (shape === 'flag') {
-            // Флаг 🚩: Рисуем как текст (эмодзи) нужного размера
-            ctx.font = `${size}px Arial`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom'; // База флага на точке нажатия
-            ctx.fillText('🚩', x, y);
+        ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineWidth = 4 / scale;
+        if (['flag', 'skull', 'boom', 'shield', 'star'].includes(shape)) {
+            ctx.font = `${size}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(shapesMap[shape], x, y);
         } else if (shape === 'circle') {
-            // Круг ⭕: Рисуем обводку
-            ctx.beginPath();
-            ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-            ctx.stroke();
+            ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.stroke();
         } else if (shape === 'square') {
-            // Квадрат ⬛: Рисуем обводку
             ctx.strokeRect(x - size / 2, y - size / 2, size, size);
         }
         ctx.restore();
     }
 
-    // ИСТОРИЯ (UNDO/REDO)
     function saveState() { history.push(drawCanvas.toDataURL()); if (history.length > 20) history.shift(); redoStack = []; }
     function undo() { if (history.length) { redoStack.push(drawCanvas.toDataURL()); let img = new Image(); img.src = history.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
     function redo() { if (redoStack.length) { history.push(drawCanvas.toDataURL()); let img = new Image(); img.src = redoStack.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
 
-    // ЖЕСТЫ КАРТЫ
     mc.on("pinchstart panstart", (e) => { lastScale = scale; lastPosX = posX; lastPosY = posY; });
     mc.on("pinchmove panmove", (e) => {
         if (currentTool === 'move' || e.pointers.length >= 2) {
@@ -359,18 +303,8 @@
         }
     });
 
-    // УПРАВЛЕНИЕ (Очистка)
-    function clearAll() { if(confirm("Очистить всё нарисованное?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
-    
-    // Заглушка для сохранения (если sw.js его кэширует)
-    function saveImage() { clearAll(); } 
-
-    // SW.JS ДЛЯ ОФЛАЙНА
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW error:', err));
-        });
-    }
+    function clearAll() { if(confirm("Очистить нарисованное?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
+    if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.log(err)); }); }
 </script>
 </body>
 </html>
