@@ -3,85 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical ELITE</title>
+    <title>Scorpion Tactical Object-OS</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg-dark: #0f111a; --panel-bg: #1a1c2c; --accent: #ff9f0a; --danger: #ff453a; --success: #32d74b; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        
-        .toolbar { background: var(--panel-bg); display: flex; flex-direction: column; border-bottom: 2px solid #333; z-index: 2000; }
-        .tool-row { display: flex; justify-content: space-around; align-items: center; padding: 8px 5px; gap: 8px; }
-        
-        button, select { 
-            background: #2c2e43; border: 1px solid #444; color: white; padding: 12px; 
-            border-radius: 12px; font-size: 24px; cursor: pointer; flex: 1; 
-            display: flex; align-items: center; justify-content: center; min-height: 60px;
-            -webkit-user-select: none; user-select: none; transition: 0.2s;
-        }
-        
-        .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.3); box-shadow: 0 0 15px var(--accent); }
-
-        #sizeModal, #tacticsModal {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: var(--panel-bg); border: 2px solid var(--accent); padding: 25px;
-            border-radius: 25px; z-index: 3000; display: none; flex-direction: column;
-            align-items: center; gap: 20px; box-shadow: 0 0 40px rgba(0,0,0,0.9);
-            width: 85%; max-width: 320px;
-        }
-
-        #tacticsModal { border-color: var(--success); }
-        .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
-        .modal-grid button { font-size: 26px; min-height: 60px; padding: 5px; color: #fff !important; }
-        .active-shape { border-color: var(--success); background: rgba(50, 215, 75, 0.3); }
-
+        .toolbar { background: var(--panel-bg); border-bottom: 2px solid #333; z-index: 2000; }
+        .tool-row { display: flex; justify-content: space-around; padding: 8px; gap: 8px; }
+        button, select { background: #2c2e43; border: 1px solid #444; color: white; border-radius: 12px; font-size: 22px; cursor: pointer; flex: 1; min-height: 55px; display: flex; align-items: center; justify-content: center; }
+        .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        #bgCanvas { z-index: 10; }
-        #drawCanvas { z-index: 20; }
-        #tempCanvas { z-index: 30; pointer-events: none; }
-        
-        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; }
+        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; pointer-events: none; }
         #startScreen img { width: 100%; height: 100%; object-fit: cover; }
-        
-        .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; pointer-events: none; }
+        #tacticsModal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel-bg); border: 2px solid var(--success); padding: 20px; border-radius: 20px; z-index: 3000; display: none; width: 80%; }
+        .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
 
-<div id="startScreen"><img src="logo3.png" alt="Scorpion Logo"></div>
+<div id="startScreen"><img src="logo3.png"></div>
 
 <div class="toolbar">
     <div class="tool-row">
         <select id="mapPresets" onchange="loadMap(this.value)">
-            <option value="">🗺️ ПОЛИГОН</option>
+            <option value="">🗺️ КАРТА</option>
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
-        <button onclick="undo()">↩️</button>
-        <button onclick="redo()">↪️</button>
-        <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
+        <button onclick="deleteSelected()" style="color: var(--danger)">🗑️ УДАЛИТЬ</button>
+        <button onclick="clearAll()" style="color: #666">🧹 ВСЁ</button>
     </div>
     <div class="tool-row">
-        <button id="moveBtn" onclick="setTool('move')">✥</button>
-        <button id="pencilBtn">✏️</button>
-        <button id="drawBtn" class="active-tool">↗️</button>
-        <button id="tacticsBtn">🧽</button>
-        <div style="flex:0.5; display:flex; justify-content:center;">
-            <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:50px; border:none; background:none;">
-        </div>
+        <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
+        <button id="drawBtn" onclick="setTool('draw')">↗️</button>
+        <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
+        <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:55px;">
     </div>
-</div>
-
-<div id="sizeModal">
-    <div style="font-weight: bold; color: var(--accent)">НАЧАЛЬНАЯ ТОЛЩИНА</div>
-    <input type="range" id="lineWidthInput" min="2" max="25" value="8">
-    <button onclick="document.getElementById('sizeModal').style.display='none'">ОК</button>
 </div>
 
 <div id="tacticsModal">
-    <div style="font-weight: bold; color: var(--success)">ВЫБОР ЗНАКА</div>
     <div class="modal-grid">
-        <button onclick="selectTacticShape('erase')">🧽</button>
         <button onclick="selectTacticShape('flag')">🚩</button>
         <button onclick="selectTacticShape('circle')">⭕</button>
         <button onclick="selectTacticShape('square')">⬛</button>
@@ -90,211 +52,138 @@
         <button onclick="selectTacticShape('shield')">🛡️</button>
         <button onclick="selectTacticShape('star')">⭐</button>
     </div>
-    <button onclick="document.getElementById('tacticsModal').style.display='none'">ОК</button>
+    <button onclick="document.getElementById('tacticsModal').style.display='none'" style="width:100%">ЗАКРЫТЬ</button>
 </div>
 
 <div id="viewport">
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
-    <canvas id="tempCanvas"></canvas>
-    <div class="status-bar" id="zoomVal">Масштаб: 100%</div>
 </div>
 
 <script>
-    const viewport = document.getElementById('viewport');
-    const startScreen = document.getElementById('startScreen');
-    const bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
-    const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
+    const viewport = document.getElementById('viewport'), bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas');
+    const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d');
     const colorPicker = document.getElementById('colorPicker');
 
-    let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false;
-    let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
-    
-    // Переменные для динамического изменения
-    let globalLineWidth = 8, currentTacticShape = 'erase', currentTacticSize = 50;
-    let liveScale = 1; // Коэффициент изменения размера пальцами в реальном времени
+    let bgImage = new Image(), objects = [], selectedObj = null, currentTool = 'move';
+    let scale = 1, posX = 0, posY = 0, lastPosX, lastPosY, lastScale;
+    let currentTacticShape = 'flag';
 
-    const shapesMap = { erase:'🧽', flag:'🚩', circle:'⭕', square:'⬛', skull:'💀', boom:'💥', shield:'🛡️', star:'⭐' };
-
-    // ИНИЦИАЛИЗАЦИЯ ИНСТРУМЕНТОВ
-    function setTool(tool) {
-        currentTool = tool;
-        ['drawBtn', 'pencilBtn', 'tacticsBtn', 'moveBtn'].forEach(id => {
-            document.getElementById(id).classList.toggle('active-tool', id.startsWith(tool));
-        });
-        if (tool === 'tactics') document.getElementById('tacticsBtn').innerText = shapesMap[currentTacticShape];
+    function setTool(t) { 
+        currentTool = t; 
+        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
+        document.getElementById(t+'Btn')?.classList.add('active-tool');
+        if(t === 'tactics') document.getElementById('tacticsModal').style.display = 'block';
     }
 
-    // ВЕКТОРНАЯ ОТРИСОВКА
-    function drawVectorShape(ctx, x, y, shape, color, size) {
-        ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = color;
-        ctx.lineWidth = Math.max(2, size/12); ctx.lineCap = 'round';
-        const s = size / 2;
-        if (shape === 'flag') {
-            ctx.beginPath(); ctx.moveTo(-s*0.6, s); ctx.lineTo(-s*0.6, -s); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(-s*0.6, -s); ctx.lineTo(s, -s/2); ctx.lineTo(-s*0.6, 0); ctx.closePath(); ctx.fill();
-        } else if (shape === 'skull') {
-            ctx.beginPath(); ctx.arc(0, -s*0.2, s*0.7, Math.PI, 0); ctx.lineTo(s*0.4, s*0.6); ctx.lineTo(-s*0.4, s*0.6); ctx.closePath(); ctx.fill();
-        } else if (shape === 'boom') {
-            ctx.beginPath(); for(let i=0; i<12; i++) { let r = (i%2===0)?s:s*0.4; let a = (Math.PI*2/12)*i; ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); } ctx.closePath(); ctx.fill();
-        } else if (shape === 'shield') {
-            ctx.beginPath(); ctx.moveTo(-s, -s); ctx.lineTo(s, -s); ctx.quadraticCurveTo(s, s*0.5, 0, s); ctx.quadraticCurveTo(-s, s*0.5, -s, -s); ctx.fill();
-        } else if (shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.stroke(); }
-        else if (shape === 'square') { ctx.strokeRect(-s, -s, size, size); }
-        ctx.restore();
-    }
+    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; setTool('tactics'); }
 
-    // УПРАВЛЕНИЕ КАРТОЙ
     function loadMap(url) {
-        if (!url) return;
-        startScreen.style.display = 'none';
+        if(!url) return; document.getElementById('startScreen').style.display = 'none';
         bgImage.src = url;
         bgImage.onload = () => {
-            [bgCanvas, drawCanvas, tempCanvas].forEach(c => { c.width = bgImage.width; c.height = bgImage.height; });
-            drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
-            resetView();
+            bgCanvas.width = drawCanvas.width = bgImage.width;
+            bgCanvas.height = drawCanvas.height = bgImage.height;
+            resetView(); render();
         };
     }
 
     function resetView() {
-        const sRatio = viewport.clientWidth / viewport.clientHeight;
-        const mRatio = bgImage.width / bgImage.height;
-        scale = (mRatio > sRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
-        posX = (viewport.clientWidth - bgImage.width * scale) / 2;
-        posY = (viewport.clientHeight - bgImage.height * scale) / 2;
+        scale = Math.min(viewport.clientWidth/bgImage.width, viewport.clientHeight/bgImage.height);
+        posX = (viewport.clientWidth - bgImage.width * scale)/2;
+        posY = (viewport.clientHeight - bgImage.height * scale)/2;
         applyTransform();
     }
 
     function applyTransform() {
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
-        [bgCanvas, drawCanvas, tempCanvas].forEach(c => c.style.transform = tr);
-        bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
-        if (bgImage.src) bgCtx.drawImage(bgImage, 0, 0);
-        document.getElementById('zoomVal').innerText = `Масштаб: ${Math.round(scale * 100)}%`;
+        bgCanvas.style.transform = drawCanvas.style.transform = tr;
+        bgCtx.drawImage(bgImage, 0, 0);
     }
 
-    function getCoords(e) {
-        const rect = viewport.getBoundingClientRect();
-        return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
-    }
-
-    // ЖЕСТЫ (HAMMER.JS)
-    const mc = new Hammer.Manager(viewport);
-    mc.add(new Hammer.Pinch());
-    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
-
-    mc.on("pinchstart", (e) => { 
-        lastScale = scale; 
-        liveScale = 1; 
-    });
-
-    mc.on("pinchmove", (e) => {
-        if (currentTool === 'move' || e.pointers.length >= 2) {
-            if (currentTool === 'move') {
-                scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
-                applyTransform();
-            } else {
-                // Изменение размера фигурки/стрелки в реальном времени
-                liveScale = e.scale;
-                updateTempLayer(e);
+    function render() {
+        drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
+        objects.forEach(obj => {
+            drawCtx.save();
+            if(obj === selectedObj) {
+                drawCtx.shadowBlur = 15; drawCtx.shadowColor = 'white';
+                drawCtx.strokeStyle = 'white'; drawCtx.lineWidth = 2/scale;
+                drawCtx.strokeRect(obj.x - obj.size/2, obj.y - obj.size/2, obj.size, obj.size);
             }
-        }
+            if(obj.type === 'tactic') drawShape(drawCtx, obj);
+            else drawArrow(drawCtx, obj);
+            drawCtx.restore();
+        });
+    }
+
+    function drawShape(ctx, obj) {
+        ctx.fillStyle = obj.color; ctx.strokeStyle = obj.color; ctx.lineWidth = obj.size/10;
+        const s = obj.size/2;
+        ctx.translate(obj.x, obj.y);
+        if(obj.shape === 'flag') { ctx.fillRect(-2, -s, 4, s*2); ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(s, -s/2); ctx.lineTo(0,0); ctx.fill(); }
+        else if(obj.shape === 'circle') { ctx.beginPath(); ctx.arc(0,0, s, 0, 7); ctx.stroke(); }
+        else if(obj.shape === 'skull') { ctx.beginPath(); ctx.arc(0, -s*0.2, s*0.7, Math.PI, 0); ctx.lineTo(s*0.4, s*0.6); ctx.lineTo(-s*0.4, s*0.6); ctx.closePath(); ctx.fill(); }
+        else { ctx.font = `${obj.size}px Arial`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('📍', 0,0); }
+    }
+
+    function drawArrow(ctx, obj) {
+        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size;
+        ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
+        const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
+        ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
+        ctx.lineTo(obj.x2 - 20*Math.cos(angle-0.5), obj.y2 - 20*Math.sin(angle-0.5));
+        ctx.lineTo(obj.x2 - 20*Math.cos(angle+0.5), obj.y2 - 20*Math.sin(angle+0.5));
+        ctx.fill();
+    }
+
+    const mc = new Hammer.Manager(viewport);
+    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
+    mc.add(new Hammer.Pinch());
+    mc.add(new Hammer.Tap());
+
+    mc.on("tap", (e) => {
+        const p = getCoords(e.center);
+        selectedObj = objects.slice().reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < (o.size || 30));
+        render();
     });
 
-    function updateTempLayer(e) {
-        if (!isDrawing) return;
-        const p = getCoords(e.pointers[0]);
-        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-        
-        const dynamicSize = (currentTool === 'tactics' ? currentTacticSize : globalLineWidth) * liveScale;
-        
-        if (currentTool === 'draw') {
-            const bend = (e.pointers[0].clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(tempCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, '', bend, dynamicSize / scale);
-        } else if (currentTool === 'tactics' && currentTacticShape !== 'erase') {
-            drawVectorShape(tempCtx, startPoint.x, startPoint.y, currentTacticShape, colorPicker.value, dynamicSize / scale);
+    mc.on("panstart pinchstart", (e) => {
+        lastPosX = posX; lastPosY = posY; lastScale = scale;
+        if(selectedObj) { selectedObj._s = selectedObj.size; selectedObj._x = selectedObj.x; selectedObj._y = selectedObj.y; }
+    });
+
+    mc.on("panmove pinchemove", (e) => {
+        if(selectedObj) {
+            if(e.type.includes('pinch')) selectedObj.size = selectedObj._s * e.scale;
+            else { selectedObj.x = selectedObj._x + e.deltaX/scale; selectedObj.y = selectedObj._y + e.deltaY/scale; }
+            render();
+        } else if(currentTool === 'move') {
+            posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY;
+            if(e.type.includes('pinch')) scale = lastScale * e.scale;
+            applyTransform();
         }
-    }
+    });
 
     viewport.addEventListener('pointerdown', (e) => {
-        if (!bgImage.src || (e.pointerType === 'touch' && !e.isPrimary)) return;
+        if(currentTool === 'move' || selectedObj) return;
         const p = getCoords(e);
-        if (currentTool === 'move') { lastPosX = posX; lastPosY = posY; return; }
-        
-        isDrawing = true; startPoint = p; liveScale = 1;
-        if (currentTool === 'pencil' || (currentTool === 'tactics' && currentTacticShape === 'erase')) {
-            saveState(); drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
+        if(currentTool === 'tactics') {
+            objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:50, color:colorPicker.value });
+            selectedObj = objects[objects.length-1];
+        } else if(currentTool === 'draw') {
+            objects.push({ type:'arrow', x:p.x, y:p.y, x2:p.x+50, y2:p.y-50, size:5, color:colorPicker.value });
+            selectedObj = objects[objects.length-1];
         }
+        render();
     });
 
-    viewport.addEventListener('pointermove', (e) => {
-        if (currentTool === 'move' && e.buttons === 1) {
-            posX = lastPosX + e.movementX; posY = lastPosY + e.movementY;
-            applyTransform(); return;
-        }
-        if (!isDrawing || e.buttons !== 1) return;
-        const p = getCoords(e);
-        if (currentTool === 'pencil') {
-            drawCtx.lineWidth = globalLineWidth / scale; drawCtx.strokeStyle = colorPicker.value;
-            drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
-        } else if (currentTool === 'tactics' && currentTacticShape === 'erase') {
-            drawCtx.globalCompositeOperation = 'destination-out';
-            drawCtx.lineWidth = currentTacticSize / scale;
-            drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
-            drawCtx.globalCompositeOperation = 'source-over';
-        } else {
-            updateTempLayer({pointers: [e]});
-        }
-    });
-
-    window.addEventListener('pointerup', (e) => {
-        if (!isDrawing) return;
-        isDrawing = false;
-        const p = getCoords(e);
-        const finalSize = (currentTool === 'tactics' ? currentTacticSize : globalLineWidth) * liveScale;
-
-        if (currentTool === 'draw') {
-            const label = prompt("Позывной:");
-            saveState();
-            const bend = (e.clientX - (startPoint.x * scale + posX + viewport.getBoundingClientRect().left)) * 0.001;
-            drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, label, bend, finalSize / scale);
-        } else if (currentTool === 'tactics' && currentTacticShape !== 'erase') {
-            saveState();
-            drawVectorShape(drawCtx, startPoint.x, startPoint.y, currentTacticShape, colorPicker.value, finalSize / scale);
-        }
-        tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-    });
-
-    // СТРЕЛКА
-    function drawArrow(ctx, x1, y1, x2, y2, color, label, bend, width) {
-        ctx.beginPath(); ctx.lineWidth = width; ctx.strokeStyle = color; ctx.fillStyle = color;
-        const cpX = (x1 + x2) / 2 - (y2 - y1) * bend, cpY = (y1 + y2) / 2 + (x2 - x1) * bend;
-        ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cpX, cpY, x2, y2); ctx.stroke();
-        const angle = Math.atan2(y2 - cpY, x2 - cpX);
-        const headLen = (width * 3) + 12;
-        ctx.beginPath(); ctx.moveTo(x2, y2);
-        ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI/6), y2 - headLen * Math.sin(angle - Math.PI/6));
-        ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI/6), y2 - headLen * Math.sin(angle + Math.PI/6));
-        ctx.closePath(); ctx.fill();
-        if (label) {
-            ctx.save(); ctx.font = `bold ${24/scale}px Arial`; ctx.textAlign = "center";
-            ctx.translate(cpX, cpY); ctx.rotate(Math.atan2(y2-y1, x2-x1));
-            ctx.fillText(label.toUpperCase(), 0, -(width + 12)); ctx.restore();
-        }
+    function getCoords(c) {
+        const r = viewport.getBoundingClientRect();
+        return { x: (c.x - r.left - posX)/scale, y: (c.y - r.top - posY)/scale };
     }
 
-    // LONG PRESS ДЛЯ ВЫЗОВА МЕНЮ
-    [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
-        new Hammer(btn).on('press', () => document.getElementById('sizeModal').style.display='flex');
-        btn.onclick = () => setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw');
-    });
-    new Hammer(document.getElementById('tacticsBtn')).on('press', () => document.getElementById('tacticsModal').style.display='flex');
-    document.getElementById('tacticsBtn').onclick = () => setTool('tactics');
-
-    function selectTacticShape(shape) { currentTacticShape = shape; setTool('tactics'); document.getElementById('tacticsModal').style.display='none'; }
-    function saveState() { history.push(drawCanvas.toDataURL()); if (history.length > 20) history.shift(); redoStack = []; }
-    function undo() { if (history.length) { redoStack.push(drawCanvas.toDataURL()); let img = new Image(); img.src = history.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
-    function clearAll() { if(confirm("Очистить?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
+    function deleteSelected() { if(selectedObj) { objects = objects.filter(o => o !== selectedObj); selectedObj = null; render(); } }
+    function clearAll() { if(confirm("Очистить всё?")) { objects = []; selectedObj = null; render(); } }
 </script>
 </body>
 </html>
