@@ -3,26 +3,42 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.15 Mod</title>
+    <title>Scorpion Tactical v.15</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
-        body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; height: 100vh; display: flex; flex-direction: column; }
+        body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
+        #splash {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; display: flex; 
+            align-items: center; justify-content: center; transition: opacity 0.8s ease;
+        }
+        #splash img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .splash-content { position: relative; z-index: 10000; display: flex; flex-direction: column; align-items: center; transform: translateY(150px); }
+        .loading-text { font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 10px #000; animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
-        
-        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; min-height: 45px; flex: 1; display: flex; align-items: center; justify-content: center; outline: none; }
+        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; min-height: 45px; flex: 1; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
+        
+        #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
+        
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        
-        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
+        .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; pointer-events: none; border: 1px solid #444; }
     </style>
 </head>
 <body>
+
+<div id="splash">
+    <img src="logo3.png" alt="">
+    <div class="splash-content"><div class="loading-text">ЗАГРУЗКА...</div></div>
+</div>
 
 <div class="toolbar">
     <div class="tool-row">
@@ -31,12 +47,9 @@
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
-        
-        <button onclick="document.getElementById('mapInput').click()">⚙️</button>
-        <input type="file" id="mapInput" style="display:none" accept="image/*" onchange="loadCustomMap(this)">
-        
         <button onclick="undo()">↩️</button>
-        <button onclick="clearCanvas()" style="color: var(--danger)">🗑️</button>
+        <button onclick="redo()">↪️</button>
+        <button onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
@@ -45,8 +58,8 @@
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
     </div>
     <div class="tool-row">
-        <input type="range" id="sizeSlider" min="10" max="100" value="40">
-        <input type="color" id="colorPicker" value="#32d74b">
+        <input type="range" id="sizeSlider" min="10" max="100" value="40" oninput="updateObjSize(this.value)">
+        <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;" onchange="updateObjColor(this.value)">
     </div>
 </div>
 
@@ -59,30 +72,34 @@
     <button onclick="selectTacticShape('flag')">🚩</button>
     <button onclick="selectTacticShape('skull')">💀</button>
     <button onclick="selectTacticShape('boom')">💥</button>
+    <button onclick="selectTacticShape('star')">⭐</button>
 </div>
 
 <div id="viewport">
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
     <canvas id="tempCanvas"></canvas>
+    <div class="status-bar" id="zoomVal">Зум: 100%</div>
 </div>
 
 <script>
-    const viewport = document.getElementById('viewport');
-    const bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            const s = document.getElementById('splash');
+            s.style.opacity = '0';
+            setTimeout(() => s.style.display = 'none', 800);
+        }, 2200);
+    });
+
+    const viewport = document.getElementById('viewport'), 
+          bgCanvas = document.getElementById('bgCanvas'), 
+          drawCanvas = document.getElementById('drawCanvas'), 
+          tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
-
-    let bgImage = new Image(), objects = [], scale = 1, posX = 0, posY = 0;
-    let isDrawing = false, startP = null, currentTool = 'move', currentTacticShape = 'flag', selectedObj = null;
-
-    // ЗАГРУЗКА СВОЕЙ КАРТЫ
-    function loadCustomMap(input) {
-        if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function(e) { handleMapChange(e.target.result); };
-            reader.readAsDataURL(input.files[0]);
-        }
-    }
+    
+    let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
+    let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
+    let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
 
     function handleMapChange(url) {
         if (!url) return;
@@ -90,9 +107,9 @@
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = tempCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = tempCanvas.height = bgImage.height;
-            scale = Math.min(viewport.clientWidth / bgImage.width, viewport.clientHeight / bgImage.height);
-            posX = (viewport.clientWidth - bgImage.width * scale) / 2;
-            posY = (viewport.clientHeight - bgImage.height * scale) / 2;
+            scale = Math.min(viewport.clientWidth/bgImage.width, viewport.clientHeight/bgImage.height);
+            posX = (viewport.clientWidth - bgImage.width * scale)/2;
+            posY = (viewport.clientHeight - bgImage.height * scale)/2;
             applyTransform(); render();
         };
     }
@@ -101,15 +118,32 @@
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
         [bgCanvas, drawCanvas, tempCanvas].forEach(c => c.style.transform = tr);
         bgCtx.drawImage(bgImage, 0, 0);
+        document.getElementById('zoomVal').innerText = `Зум: ${Math.round(scale * 100)}%`;
     }
 
+    function setTool(t) {
+        const modal = document.getElementById('tacticsModal');
+        if (t === 'tactics') {
+            if (modal.style.display === 'grid') { modal.style.display = 'none'; return; }
+            modal.style.display = 'grid';
+        } else { modal.style.display = 'none'; }
+        currentTool = t;
+        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
+        document.getElementById(t + 'Btn')?.classList.add('active-tool');
+        if (t !== 'move') { selectedObj = null; render(); }
+    }
+
+    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
+    function updateObjSize(v) { if(selectedObj) { selectedObj.size = parseFloat(v); render(); } }
+    function updateObjColor(v) { if(selectedObj) { selectedObj.color = v; render(); } }
+
     function render() {
-        drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
         objects.forEach(obj => {
             drawCtx.save();
             if(obj === selectedObj) {
-                drawCtx.strokeStyle = "rgba(255,255,255,0.5)"; drawCtx.lineWidth = 2/scale;
-                const r = (obj.type==='tactic' ? obj.size*2.5 : obj.size) * 1.2;
+                drawCtx.strokeStyle = "rgba(255,255,255,0.8)"; drawCtx.lineWidth = 2/scale;
+                const r = (obj.type === 'tactic' ? obj.size * 2.5 : obj.size) * 1.2;
                 drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
@@ -120,26 +154,39 @@
     }
 
     function drawTactic(ctx, obj) {
-        const map = { scorpion:'🦂', octopus:'🐙', '99':'99', knight:'LEGION', bsg:'BSG', flag:'🚩', skull:'💀', boom:'💥' };
-        const content = map[obj.shape] || '🚩';
-        const size = obj.size * 2.5;
+        const map = { scorpion: '🦂', octopus: '🐙', '99': '99', knight: 'LEGION', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', star: '⭐' };
+        const content = map[obj.shape] || obj.shape;
+        
+        // УВЕЛИЧЕННЫЙ КОЭФФИЦИЕНТ ДЛЯ ФИГУРОК (в 2.5 раза больше стрелок)
+        const displaySize = obj.size * 2.5;
+        
         ctx.translate(obj.x, obj.y);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = `bold ${size}px Arial`;
-        if (['99','BSG','LEGION','🚩'].includes(content)) {
-            ctx.strokeStyle = "black"; ctx.lineWidth = size/10; ctx.strokeText(content, 0, 0);
-            ctx.fillStyle = obj.color; ctx.fillText(content, 0, 0);
-        } else { ctx.fillText(content, 0, 0); }
+        ctx.font = `bold ${displaySize}px Arial`;
+
+        // ПЕРЕКРАШИВАЕМЫЕ ЭЛЕМЕНТЫ (Флаг теперь здесь)
+        const isDyn = ['99', 'BSG', 'LEGION', '🚩'].includes(content);
+
+        if (isDyn) {
+            ctx.strokeStyle = "black"; ctx.lineWidth = displaySize / 10;
+            ctx.strokeText(content, 0, 0);
+            ctx.fillStyle = obj.color;
+            ctx.fillText(content, 0, 0);
+        } else {
+            ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5;
+            ctx.fillText(content, 0, 0);
+        }
     }
 
     function drawArrow(ctx, obj) {
-        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/10;
+        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; 
+        ctx.lineWidth = obj.size / 10;
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
-        const head = obj.size / 2.5;
+        const headLen = obj.size / 2.5; 
         ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
-        ctx.lineTo(obj.x2 - head * Math.cos(angle - 0.5), obj.y2 - head * Math.sin(angle - 0.5));
-        ctx.lineTo(obj.x2 - head * Math.cos(angle + 0.5), obj.y2 - head * Math.sin(angle + 0.5));
+        ctx.lineTo(obj.x2 - headLen * Math.cos(angle - 0.5), obj.y2 - headLen * Math.sin(angle - 0.5));
+        ctx.lineTo(obj.x2 - headLen * Math.cos(angle + 0.5), obj.y2 - headLen * Math.sin(angle + 0.5));
         ctx.fill();
         if(obj.label) {
             ctx.font = `bold ${obj.size/1.2}px Arial`; ctx.textAlign = "center";
@@ -155,34 +202,25 @@
         obj.points.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
     }
 
-    function setTool(t) {
-        if(t === 'tactics') document.getElementById('tacticsModal').style.display = 'grid';
-        else document.getElementById('tacticsModal').style.display = 'none';
-        currentTool = t;
-        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
-        document.getElementById(t+'Btn').classList.add('active-tool');
-        selectedObj = null; render();
-    }
-
-    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
-    function undo() { objects.pop(); render(); }
-    function clearCanvas() { if(confirm('Очистить всё?')) { objects = []; render(); } }
-
     function getCoords(e) {
         const r = viewport.getBoundingClientRect();
         const cx = e.touches ? e.touches[0].clientX : e.clientX;
         const cy = e.touches ? e.touches[0].clientY : e.clientY;
-        return { x: (cx - r.left - posX) / scale, y: (cy - r.top - posY) / scale };
+        return { x: (cx - r.left - posX)/scale, y: (cy - r.top - posY)/scale };
     }
 
     viewport.addEventListener('pointerdown', (e) => {
         if(!bgImage.src) return;
         const p = getCoords(e);
         if(currentTool === 'move') {
-            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < (o.type==='tactic'?o.size*2:60)/scale);
+            selectedObj = [...objects].reverse().find(o => {
+                const hit = o.type === 'tactic' ? o.size * 2 : 60;
+                return Math.hypot(o.x - p.x, o.y - p.y) < hit/scale;
+            });
+            if(selectedObj) document.getElementById('sizeSlider').value = selectedObj.size;
             render(); return;
         }
-        isDrawing = true; startP = p;
+        isDrawing = true; startP = p; saveState();
         if(currentTool === 'pencil') objects.push({ type:'pencil', color:document.getElementById('colorPicker').value, width:document.getElementById('sizeSlider').value/12/scale, points:[p] });
     });
 
@@ -191,22 +229,30 @@
         const p = getCoords(e);
         tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
         if(currentTool === 'pencil') { objects[objects.length-1].points.push(p); render(); }
-        else if(currentTool === 'draw') drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:document.getElementById('colorPicker').value, size:document.getElementById('sizeSlider').value/scale});
+        else if(currentTool === 'draw') {
+            drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:document.getElementById('colorPicker').value, size:document.getElementById('sizeSlider').value/scale});
+        }
     });
 
     window.addEventListener('pointerup', (e) => {
         if(!isDrawing) return;
         isDrawing = false;
-        const p = getCoords(e), color = document.getElementById('colorPicker').value, size = parseFloat(document.getElementById('sizeSlider').value);
+        const p = getCoords(e);
+        const color = document.getElementById('colorPicker').value;
+        const size = parseFloat(document.getElementById('sizeSlider').value);
         if(currentTool === 'draw') {
-            const l = prompt("Позывной:");
-            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: l || "" });
-        } else if(currentTool === 'tactics') objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:size, color:color });
-        tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height); render();
+            const label = prompt("Позывной:");
+            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: label || "" });
+        } else if(currentTool === 'tactics') {
+            objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:size, color:color });
+        }
+        tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
+        render();
     });
 
     const mc = new Hammer.Manager(viewport);
-    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 })); mc.add(new Hammer.Pinch({ enable: true }));
+    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
+    mc.add(new Hammer.Pinch({ enable: true }));
     mc.on("panstart pinchstart", () => {
         lastPosX = posX; lastPosY = posY; lastScale = scale;
         if(selectedObj) { selectedObj._x = selectedObj.x; selectedObj._y = selectedObj.y; selectedObj._x2 = selectedObj.x2; selectedObj._y2 = selectedObj.y2; }
@@ -223,6 +269,10 @@
             applyTransform();
         }
     });
+
+    function saveState() { history.push(JSON.stringify(objects)); redoStack = []; }
+    function undo() { if(history.length) { redoStack.push(JSON.stringify(objects)); objects = JSON.parse(history.pop()); render(); } }
+    function redo() { if(redoStack.length) { history.push(JSON.stringify(objects)); objects = JSON.parse(redoStack.pop()); render(); } }
 </script>
 </body>
 </html>
