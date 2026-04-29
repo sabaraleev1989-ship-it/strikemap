@@ -3,19 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.16.2</title>
+    <title>Scorpion Tactical v.16.3</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        /* Splash Screen */
         #splash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; display: flex; align-items: center; justify-content: center; transition: opacity 0.8s ease; }
         #splash img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         .loading-text { position: relative; z-index: 10000; font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); transform: translateY(150px); animation: blink 1.5s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-        /* Toolbar UI */
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 6px; }
         .tool-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
         .tool-row:last-child { margin-bottom: 0; }
@@ -27,16 +25,14 @@
             touch-action: manipulation; flex: 1;
         }
         
-        .btn-small { flex: 0.7; } /* Узкие кнопки для истории */
+        .btn-small { flex: 0.7; }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
         
         #mapPresets { flex: 3; } 
         #sizeSlider { flex: 2; height: 35px; accent-color: var(--accent); }
 
-        /* Modal */
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
-        /* Viewport & Canvas */
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; pointer-events: none; border: 1px solid #444; }
@@ -53,7 +49,7 @@
     <div class="tool-row">
         <select id="mapPresets" onchange="handleMapChange(this.value)">
             <option value="">🗺️ КАРТА</option>
-            <option value="logo1.png">Ущелье</option>
+            <option value="logo1.png">База 99</option>
             <option value="logo2.png">Ахун</option>
         </select>
         <button class="btn-small" onclick="document.getElementById('fileInput').click()">⚙️</button>
@@ -96,7 +92,6 @@
 </div>
 
 <script>
-    // Логика загрузки и управления картами
     window.addEventListener('load', () => {
         loadCustomMaps();
         setTimeout(() => {
@@ -127,11 +122,9 @@
                 const opt = document.createElement('option');
                 opt.value = url; opt.text = name;
                 select.appendChild(opt);
-                
                 let saved = JSON.parse(localStorage.getItem('st_maps') || '[]');
                 saved.push({name, url});
                 localStorage.setItem('st_maps', JSON.stringify(saved));
-                
                 select.value = url;
                 handleMapChange(url);
             };
@@ -207,7 +200,6 @@
         ctx.translate(obj.x, obj.y);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = `bold ${displaySize}px Arial`;
-        
         if (['99', 'BSG', 'LEGION', '🚩'].includes(content)) {
             ctx.strokeStyle = "black"; ctx.lineWidth = displaySize / 10;
             ctx.strokeText(content, 0, 0);
