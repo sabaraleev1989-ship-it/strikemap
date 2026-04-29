@@ -16,12 +16,11 @@
             background: #2c2e43; border: 1px solid #444; color: white; padding: 12px; 
             border-radius: 12px; font-size: 24px; cursor: pointer; flex: 1; 
             display: flex; align-items: center; justify-content: center; min-height: 60px;
-            -webkit-user-select: none; user-select: none; /* Важно для лонгпресса */
+            -webkit-user-select: none; user-select: none;
         }
         
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.3); box-shadow: 0 0 15px var(--accent); }
 
-        /* Окно выбора толщины */
         #sizeModal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: var(--panel-bg); border: 2px solid var(--accent); padding: 25px;
@@ -31,7 +30,7 @@
         }
         
         #sizeModal input[type="range"] { width: 100%; height: 50px; accent-color: var(--accent); }
-        .preview-circle { background: var(--accent); border-radius: 50%; transition: transform 0.1s; }
+        .preview-circle { background: var(--accent); border-radius: 50%; }
 
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -72,7 +71,7 @@
 <div id="sizeModal">
     <div style="font-weight: bold; color: var(--accent)">ТОЛЩИНА ЛИНИИ</div>
     <div id="sizePreview" class="preview-circle"></div>
-    <input type="range" id="lineWidthInput" min="2" max="50" value="8" oninput="updatePreview(this.value)">
+    <input type="range" id="lineWidthInput" min="2" max="25" value="8" oninput="updatePreview(this.value)">
     <button onclick="closeSizeModal()" style="width: 100%; min-height: 50px;">ГОТОВО</button>
 </div>
 
@@ -89,33 +88,20 @@
     const startScreen = document.getElementById('startScreen');
     const bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
-    const sizeModal = document.getElementById('sizeModal');
-    const sizeInput = document.getElementById('lineWidthInput');
-    const sizePreview = document.getElementById('sizePreview');
+    const sizeModal = document.getElementById('sizeModal'), sizeInput = document.getElementById('lineWidthInput'), sizePreview = document.getElementById('sizePreview');
 
     let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false, startPoint = {x: 0, y: 0};
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
     let globalLineWidth = 8;
 
-    // Инициализация Hammer для кнопок (Long Press)
-    const pencilBtn = document.getElementById('pencilBtn');
-    const drawBtn = document.getElementById('drawBtn');
-
-    [pencilBtn, drawBtn].forEach(btn => {
+    // Инициализация Long Press (удержание) для карандаша и стрелки
+    [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
         const h = new Hammer(btn);
-        h.get('press').set({ time: 500 }); // Удержание полсекунды
-
-        h.on('tap', () => {
-            setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw');
-        });
-
-        h.on('press', () => {
-            setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw');
-            openSizeModal();
-        });
+        h.get('press').set({ time: 500 });
+        h.on('tap', () => setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'));
+        h.on('press', () => { setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'); openSizeModal(); });
     });
 
-    // Зум и панорама
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
@@ -128,23 +114,13 @@
         });
     }
 
-    function openSizeModal() {
-        sizeModal.style.display = 'flex';
-        updatePreview(globalLineWidth);
-    }
-
-    function closeSizeModal() {
-        globalLineWidth = parseInt(sizeInput.value);
-        sizeModal.style.display = 'none';
-    }
-
+    function openSizeModal() { sizeModal.style.display = 'flex'; updatePreview(globalLineWidth); }
+    function closeSizeModal() { globalLineWidth = parseInt(sizeInput.value); sizeModal.style.display = 'none'; }
     function updatePreview(val) {
-        sizePreview.style.width = val + 'px';
-        sizePreview.style.height = val + 'px';
+        sizePreview.style.width = val + 'px'; sizePreview.style.height = val + 'px';
         sizePreview.style.backgroundColor = document.getElementById('colorPicker').value;
     }
 
-    // РАБОТА С КАНВАСОМ
     function loadMap(url) {
         if (!url) { startScreen.style.visibility = 'visible'; return; }
         startScreen.style.visibility = 'hidden';
@@ -182,11 +158,8 @@
         if (!bgImage.src || (e.pointerType === 'touch' && !e.isPrimary)) return;
         const p = getCoords(e);
         if (currentTool === 'move') return;
-        isDrawing = true; startPoint = p;
-        saveState();
-        if (currentTool === 'pencil' || currentTool === 'erase') {
-            drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
-        }
+        isDrawing = true; startPoint = p; saveState();
+        if (currentTool === 'pencil' || currentTool === 'erase') { drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y); }
     });
 
     viewport.addEventListener('pointermove', (e) => {
@@ -247,8 +220,7 @@
     mc.on("pinchmove panmove", (e) => {
         if (currentTool === 'move' || e.pointers.length >= 2) {
             if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
-            posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY;
-            applyTransform();
+            posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY; applyTransform();
         }
     });
 
