@@ -3,31 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical Final Fixed</title>
+    <title>Scorpion Tactical Custom</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
-        .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; }
+        .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
         
         button, select { 
-            background: #21262d; border: 1px solid #30363d; color: white; border-radius: 10px; 
-            font-size: 24px; cursor: pointer; flex: 1; display: flex; align-items: center; 
-            justify-content: center; min-height: 55px;
+            background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; 
+            font-size: 20px; cursor: pointer; flex: 1; display: flex; align-items: center; 
+            justify-content: center; min-height: 45px;
         }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
         
+        #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
+        label { font-size: 10px; color: #888; text-align: center; }
+
         #tacticsModal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: var(--panel); border: 2px solid var(--accent); padding: 20px;
-            border-radius: 20px; z-index: 3000; display: none; grid-template-columns: repeat(4, 1fr); gap: 10px;
+            background: var(--panel); border: 2px solid var(--accent); padding: 15px;
+            border-radius: 15px; z-index: 3000; display: none; grid-template-columns: repeat(4, 1fr); gap: 10px;
         }
+        .tactic-btn { font-size: 28px; padding: 10px; }
 
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; }
+        .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
 </head>
 <body>
@@ -41,25 +45,32 @@
         </select>
         <button onclick="undo()">↩️</button>
         <button onclick="redo()">↪️</button>
-        <button onclick="objects=[]; render();" style="color: #ff453a">🗑️</button>
+        <button onclick="if(confirm('Очистить всё?')) {objects=[]; render();}" style="color: #ff453a">🗑️</button>
     </div>
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
         <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
         <button id="drawBtn" onclick="setTool('draw')">↗️</button>
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
-        <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:50px; border:none; background:none;">
+    </div>
+    <div class="tool-row">
+        <div style="display:flex; flex-direction:column; flex:2;">
+            <label>РАЗМЕР / ТОЛЩИНА</label>
+            <input type="range" id="sizeSlider" min="10" max="200" value="50" oninput="updateObjSize(this.value)">
+        </div>
+        <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;" onchange="updateObjColor(this.value)">
     </div>
 </div>
 
 <div id="tacticsModal">
-    <button onclick="selectTacticShape('flag')">🚩</button>
-    <button onclick="selectTacticShape('circle')">⭕</button>
-    <button onclick="selectTacticShape('square')">⬛</button>
-    <button onclick="selectTacticShape('skull')">💀</button>
-    <button onclick="selectTacticShape('boom')">💥</button>
-    <button onclick="selectTacticShape('shield')">🛡️</button>
-    <button onclick="selectTacticShape('star')">⭐</button>
+    <button class="tactic-btn" onclick="selectTacticShape('scorpion')">🦂</button>
+    <button class="tactic-btn" onclick="selectTacticShape('99')">99</button>
+    <button class="tactic-btn" onclick="selectTacticShape('knight')">🪖</button>
+    <button class="tactic-btn" onclick="selectTacticShape('bsg')">BSG</button>
+    <button class="tactic-btn" onclick="selectTacticShape('flag')">🚩</button>
+    <button class="tactic-btn" onclick="selectTacticShape('skull')">💀</button>
+    <button class="tactic-btn" onclick="selectTacticShape('boom')">💥</button>
+    <button class="tactic-btn" onclick="selectTacticShape('star')">⭐</button>
 </div>
 
 <div id="viewport">
@@ -72,6 +83,8 @@
 <script>
     const viewport = document.getElementById('viewport'), bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
+    const colorPicker = document.getElementById('colorPicker');
+    const sizeSlider = document.getElementById('sizeSlider');
 
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
@@ -82,13 +95,20 @@
         document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
         document.getElementById(t+'Btn')?.classList.add('active-tool');
         document.getElementById('tacticsModal').style.display = (t === 'tactics') ? 'grid' : 'none';
-        if(t !== 'move') selectedObj = null;
-        render();
+        if(t !== 'move') { selectedObj = null; render(); }
     }
 
     function selectTacticShape(s) {
         currentTacticShape = s;
         document.getElementById('tacticsModal').style.display = 'none';
+    }
+
+    function updateObjSize(val) {
+        if(selectedObj) { selectedObj.size = parseFloat(val); render(); }
+    }
+
+    function updateObjColor(val) {
+        if(selectedObj) { selectedObj.color = val; render(); }
     }
 
     function handleMapChange(url) {
@@ -118,7 +138,8 @@
             if(obj === selectedObj) {
                 drawCtx.shadowBlur = 15; drawCtx.shadowColor = "white";
                 drawCtx.strokeStyle = "var(--accent)"; drawCtx.lineWidth = 3/scale;
-                drawCtx.strokeRect(obj.x - 25/scale, obj.y - 25/scale, 50/scale, 50/scale);
+                const s = (obj.size || 30) / 1.5;
+                drawCtx.strokeRect(obj.x - s, obj.y - s, s*2, s*2);
             }
             if(obj.type === 'tactic') drawShape(drawCtx, obj);
             else if(obj.type === 'arrow') drawArrow(drawCtx, obj);
@@ -129,23 +150,37 @@
 
     function drawShape(ctx, obj) {
         ctx.save(); ctx.translate(obj.x, obj.y);
-        ctx.font = `${obj.size}px Arial`; ctx.textAlign='center'; ctx.textBaseline='middle';
-        const emojiMap = {flag:'🚩', circle:'⭕', square:'⬛', skull:'💀', boom:'💥', shield:'🛡️', star:'⭐'};
-        ctx.fillText(emojiMap[obj.shape], 0, 0);
+        ctx.fillStyle = obj.color;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        
+        const emojiMap = {
+            scorpion: '🦂', '99': '99', knight: '🪖', bsg: 'BSG',
+            flag: '🚩', skull: '💀', boom: '💥', star: '⭐'
+        };
+        
+        const content = emojiMap[obj.shape] || obj.shape;
+        ctx.font = `bold ${obj.size}px Arial`;
+        
+        // Для текста BSG и 99 добавляем обводку для читаемости
+        if(obj.shape === 'bsg' || obj.shape === '99') {
+            ctx.strokeStyle = "black"; ctx.lineWidth = obj.size/10;
+            ctx.strokeText(content, 0, 0);
+        }
+        ctx.fillText(content, 0, 0);
         ctx.restore();
     }
 
     function drawArrow(ctx, obj) {
-        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/4;
+        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/5;
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
-        const head = obj.size * 1.5;
+        const head = obj.size * 0.8;
         ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
         ctx.lineTo(obj.x2 - head * Math.cos(angle - 0.5), obj.y2 - head * Math.sin(angle - 0.5));
         ctx.lineTo(obj.x2 - head * Math.cos(angle + 0.5), obj.y2 - head * Math.sin(angle + 0.5));
         ctx.fill();
         if (obj.label) {
-            ctx.font = `bold ${obj.size * 1.5}px Arial`; ctx.textAlign = "center";
+            ctx.font = `bold ${obj.size * 0.8}px Arial`; ctx.textAlign = "center";
             ctx.lineWidth = 3/scale; ctx.strokeStyle = "black";
             ctx.strokeText(obj.label.toUpperCase(), obj.x2, obj.y2 - head);
             ctx.fillText(obj.label.toUpperCase(), obj.x2, obj.y2 - head);
@@ -166,15 +201,17 @@
     }
 
     viewport.addEventListener('pointerdown', (e) => {
+        if(!bgImage.src) return;
+        const p = getCoords(e);
+        
         if(currentTool === 'move') {
-            const p = getCoords(e);
-            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 40/scale);
-            render();
-            return;
+            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 50/scale);
+            if(selectedObj) sizeSlider.value = selectedObj.size;
+            render(); return;
         }
-        isDrawing = true; startP = getCoords(e);
-        saveState();
-        if(currentTool === 'pencil') objects.push({ type:'pencil', color:document.getElementById('colorPicker').value, width:15/scale, points:[startP] });
+        
+        isDrawing = true; startP = p; saveState();
+        if(currentTool === 'pencil') objects.push({ type:'pencil', color:colorPicker.value, width:sizeSlider.value/scale, points:[p] });
     });
 
     viewport.addEventListener('pointermove', (e) => {
@@ -182,15 +219,20 @@
         const p = getCoords(e);
         tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
         if(currentTool === 'pencil') { objects[objects.length-1].points.push(p); render(); }
-        else if(currentTool === 'draw') drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:document.getElementById('colorPicker').value, size:20/scale});
+        else if(currentTool === 'draw') drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:colorPicker.value, size:sizeSlider.value/scale});
     });
 
     window.addEventListener('pointerup', (e) => {
         if(!isDrawing) return;
         isDrawing = false;
         const p = getCoords(e);
-        if(currentTool === 'draw') objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:20/scale, color:document.getElementById('colorPicker').value, label: prompt("Позывной:") });
-        else if(currentTool === 'tactics') objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:40/scale, color:document.getElementById('colorPicker').value });
+        if(currentTool === 'draw') {
+            const txt = prompt("Позывной:");
+            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:sizeSlider.value/scale, color:colorPicker.value, label: txt });
+        }
+        else if(currentTool === 'tactics') {
+            objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:parseFloat(sizeSlider.value), color:colorPicker.value });
+        }
         tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
         render();
     });
@@ -207,7 +249,8 @@
     mc.on("panmove pinchmove", (e) => {
         if(selectedObj) {
             if(e.type === 'pinchmove') {
-                selectedObj.size = Math.max(10, selectedObj._s * e.scale);
+                selectedObj.size = Math.max(5, selectedObj._s * e.scale);
+                sizeSlider.value = selectedObj.size;
             } else {
                 const dx = e.deltaX/scale, dy = e.deltaY/scale;
                 selectedObj.x = selectedObj._x + dx; selectedObj.y = selectedObj._y + dy;
@@ -216,7 +259,7 @@
             render();
         } else if(currentTool === 'move') {
             posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY;
-            if(e.type === 'pinchmove') scale = Math.max(0.1, lastScale * e.scale);
+            if(e.type === 'pinchmove') scale = Math.max(0.05, lastScale * e.scale);
             applyTransform();
         }
     });
