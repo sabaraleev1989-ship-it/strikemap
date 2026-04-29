@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical PRO-FIX</title>
+    <title>Scorpion Tactical FINAL</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg-dark: #0f111a; --panel-bg: #1a1c2c; --accent: #ff9f0a; --danger: #ff453a; --success: #32d74b; }
@@ -13,16 +13,19 @@
         button, select { 
             background: #2c2e43; border: 1px solid #444; color: white; border-radius: 10px; 
             font-size: 24px; cursor: pointer; flex: 1; display: flex; align-items: center; 
-            justify-content: center; min-height: 55px; min-width: 0;
+            justify-content: center; min-height: 55px; min-width: 0; transition: 0.2s;
         }
-        select { flex: 2; font-size: 16px; }
-        .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.3); }
-        #tacticsModal {
+        select { flex: 1.5; font-size: 16px; }
+        .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.4); box-shadow: 0 0 10px var(--accent); }
+        
+        #sizeModal, #tacticsModal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: var(--panel-bg); border: 2px solid var(--success); padding: 20px;
-            border-radius: 20px; z-index: 3000; display: none; flex-direction: column; gap: 15px; width: 85%;
+            background: var(--panel-bg); border: 2px solid var(--accent); padding: 20px;
+            border-radius: 20px; z-index: 3000; display: none; flex-direction: column; gap: 15px; width: 80%;
         }
         .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+        input[type="range"] { width: 100%; height: 40px; accent-color: var(--accent); }
+
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; }
@@ -43,12 +46,12 @@
         </select>
         <button onclick="undo()">↩️</button>
         <button onclick="redo()">↪️</button>
-        <button onclick="deleteSelected()" style="color: var(--danger)">🗑️</button>
+        <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
     </div>
     <div class="tool-row">
-        <button id="moveBtn" onclick="setTool('move')">✥</button>
+        <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
         <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
-        <button id="drawBtn" onclick="setTool('draw')" class="active-tool">↗️</button>
+        <button id="drawBtn" onclick="setTool('draw')">↗️</button>
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
         <div style="flex:0.4; display:flex; justify-content:center;">
             <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;">
@@ -56,8 +59,13 @@
     </div>
 </div>
 
+<div id="sizeModal">
+    <div style="text-align:center; font-weight:bold;">ТОЛЩИНА</div>
+    <input type="range" id="sizeInput" min="2" max="50" value="10">
+    <button onclick="document.getElementById('sizeModal').style.display='none'" style="background:var(--accent)">ОК</button>
+</div>
+
 <div id="tacticsModal">
-    <div style="font-weight: bold; color: var(--success); text-align: center;">ТАКТИКА</div>
     <div class="modal-grid">
         <button onclick="selectTacticShape('flag')">🚩</button>
         <button onclick="selectTacticShape('circle')">⭕</button>
@@ -84,7 +92,7 @@
 
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
-    let currentTool = 'draw', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
+    let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
 
     function setTool(t) {
         currentTool = t;
@@ -103,7 +111,7 @@
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = tempCanvas.width = bgImage.width;
             bgCanvas.height = drawCanvas.height = tempCanvas.height = bgImage.height;
-            objects = []; resetView(); render();
+            objects = []; history = []; redoStack = []; resetView(); render();
         };
     }
 
@@ -126,9 +134,9 @@
         objects.forEach(obj => {
             drawCtx.save();
             if(obj === selectedObj) {
-                drawCtx.shadowBlur = 20; drawCtx.shadowColor = "white";
+                drawCtx.shadowBlur = 15; drawCtx.shadowColor = "white";
                 drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 2/scale;
-                drawCtx.strokeRect(obj.x - obj.size, obj.y - obj.size, obj.size*2, obj.size*2);
+                drawCtx.strokeRect(obj.x - 20/scale, obj.y - 20/scale, 40/scale, 40/scale);
             }
             if(obj.type === 'tactic') drawShape(drawCtx, obj);
             else if(obj.type === 'arrow') drawArrow(drawCtx, obj);
@@ -141,14 +149,13 @@
         ctx.save(); ctx.translate(obj.x, obj.y);
         ctx.fillStyle = obj.color; ctx.strokeStyle = obj.color; ctx.lineWidth = obj.size/8;
         const s = obj.size/2;
+        const emojiMap = {skull:'💀', boom:'💥', shield:'🛡️', star:'⭐'};
         if(obj.shape === 'flag') { ctx.fillRect(-2, -s, 4, s*2); ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(s, -s/2); ctx.lineTo(0,0); ctx.fill(); }
         else if(obj.shape === 'circle') { ctx.beginPath(); ctx.arc(0,0, s, 0, 7); ctx.stroke(); }
         else if(obj.shape === 'square') { ctx.strokeRect(-s, -s, obj.size, obj.size); }
-        else { ctx.font = `${obj.size}px Arial`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(getEmoji(obj.shape), 0,0); }
+        else { ctx.font = `${obj.size}px Arial`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(emojiMap[obj.shape] || '📍', 0,0); }
         ctx.restore();
     }
-
-    function getEmoji(s) { return {skull:'💀', boom:'💥', shield:'🛡️', star:'⭐'}[s] || '📍'; }
 
     function drawArrow(ctx, obj) {
         ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/4;
@@ -173,19 +180,20 @@
         obj.points.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
     }
 
-    // ЛОГИКА МЫШИ/ПАЛЬЦА
+    // СОБЫТИЯ
     viewport.addEventListener('pointerdown', (e) => {
         if(!bgImage.src) return;
         const p = getCoords({x:e.clientX, y:e.clientY});
-        if(currentTool === 'move') return;
-
-        // Выделение существующего объекта
-        const found = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < (o.size || 30));
+        
+        // Выбор объекта
+        const found = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 30/scale);
         if(found) { selectedObj = found; render(); return; }
 
-        isDrawing = true; startP = p; selectedObj = null;
+        if(currentTool === 'move') return;
+        
+        isDrawing = true; startP = p; saveState();
         if(currentTool === 'pencil') {
-            objects.push({ type:'pencil', color:colorPicker.value, width: 5/scale, points:[p] });
+            objects.push({ type:'pencil', color:colorPicker.value, width: document.getElementById('sizeInput').value/scale, points:[p] });
         }
     });
 
@@ -198,7 +206,7 @@
             objects[objects.length-1].points.push(p);
             render();
         } else if(currentTool === 'draw') {
-            drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:colorPicker.value, size:15/scale});
+            drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:colorPicker.value, size:document.getElementById('sizeInput').value/scale});
         }
     });
 
@@ -210,14 +218,14 @@
 
         if(currentTool === 'draw') {
             const label = prompt("Позывной:");
-            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:15/scale, color:colorPicker.value, label:label });
+            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:document.getElementById('sizeInput').value/scale, color:colorPicker.value, label:label });
         } else if(currentTool === 'tactics') {
             objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:40/scale, color:colorPicker.value });
         }
-        saveState(); render();
+        render();
     });
 
-    // HAMMER ДЛЯ ПЕРЕМЕЩЕНИЯ И МАСШТАБА
+    // HAMMER ДЛЯ ЗУМА И ПЕРЕМЕЩЕНИЯ ОБЪЕКТОВ
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
     mc.add(new Hammer.Pinch());
@@ -254,10 +262,17 @@
         return { x: (c.x - r.left - posX)/scale, y: (c.y - r.top - posY)/scale };
     }
 
+    // ИСТОРИЯ
     function saveState() { history.push(JSON.stringify(objects)); redoStack = []; }
     function undo() { if(history.length) { redoStack.push(JSON.stringify(objects)); objects = JSON.parse(history.pop()); render(); } }
     function redo() { if(redoStack.length) { history.push(JSON.stringify(objects)); objects = JSON.parse(redoStack.pop()); render(); } }
+    function clearAll() { if(confirm("Очистить все?")) { objects = []; history = []; redoStack = []; render(); } }
     function deleteSelected() { if(selectedObj) { saveState(); objects = objects.filter(o => o !== selectedObj); selectedObj = null; render(); } }
+
+    // Долгое нажатие для выбора размера
+    [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
+        new Hammer(btn).on('press', () => document.getElementById('sizeModal').style.display = 'flex');
+    });
 </script>
 </body>
 </html>
