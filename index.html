@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.15</title>
+    <title>Scorpion Tactical v.15.1 Custom</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
@@ -47,8 +47,11 @@
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
+        
+        <button onclick="document.getElementById('fileInput').click()" title="Добавить карту">⚙️</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="addNewMap(this)">
+        
         <button onclick="undo()">↩️</button>
-        <button onclick="redo()">↪️</button>
         <button onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
     <div class="tool-row">
@@ -83,7 +86,9 @@
 </div>
 
 <script>
+    // Загрузка сохраненных карт при старте
     window.addEventListener('load', () => {
+        loadCustomMapsFromStorage();
         setTimeout(() => {
             const s = document.getElementById('splash');
             s.style.opacity = '0';
@@ -100,6 +105,51 @@
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
+
+    // ФУНКЦИЯ ДОБАВЛЕНИЯ НОВОЙ КАРТЫ
+    function addNewMap(input) {
+        if (input.files && input.files[0]) {
+            const name = prompt("Введите название для этой карты:", "Новая карта");
+            if (!name) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const url = e.target.result;
+                const select = document.getElementById('mapPresets');
+                
+                // Добавляем в выпадающий список
+                const option = document.createElement('option');
+                option.value = url;
+                option.text = name;
+                select.appendChild(option);
+                
+                // Сохраняем в локальную память браузера
+                saveMapToStorage(name, url);
+                
+                // Сразу переключаемся на неё
+                select.value = url;
+                handleMapChange(url);
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function saveMapToStorage(name, url) {
+        let saved = JSON.parse(localStorage.getItem('custom_maps') || '[]');
+        saved.push({ name, url });
+        localStorage.setItem('custom_maps', JSON.stringify(saved));
+    }
+
+    function loadCustomMapsFromStorage() {
+        const saved = JSON.parse(localStorage.getItem('custom_maps') || '[]');
+        const select = document.getElementById('mapPresets');
+        saved.forEach(map => {
+            const option = document.createElement('option');
+            option.value = map.url;
+            option.text = map.name;
+            select.appendChild(option);
+        });
+    }
 
     function handleMapChange(url) {
         if (!url) return;
@@ -156,17 +206,11 @@
     function drawTactic(ctx, obj) {
         const map = { scorpion: '🦂', octopus: '🐙', '99': '99', knight: 'LEGION', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', star: '⭐' };
         const content = map[obj.shape] || obj.shape;
-        
-        // УВЕЛИЧЕННЫЙ КОЭФФИЦИЕНТ ДЛЯ ФИГУРОК (в 2.5 раза больше стрелок)
         const displaySize = obj.size * 2.5;
-        
         ctx.translate(obj.x, obj.y);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = `bold ${displaySize}px Arial`;
-
-        // ПЕРЕКРАШИВАЕМЫЕ ЭЛЕМЕНТЫ (Флаг теперь здесь)
         const isDyn = ['99', 'BSG', 'LEGION', '🚩'].includes(content);
-
         if (isDyn) {
             ctx.strokeStyle = "black"; ctx.lineWidth = displaySize / 10;
             ctx.strokeText(content, 0, 0);
