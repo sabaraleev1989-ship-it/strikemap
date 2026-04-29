@@ -9,6 +9,7 @@
         :root { --bg-dark: #0f111a; --panel-bg: #1a1c2c; --accent: #ff9f0a; --danger: #ff453a; --success: #32d74b; }
         body { margin: 0; padding: 0; background: var(--bg-dark); color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
+        /* Панель инструментов */
         .toolbar { background: var(--panel-bg); display: flex; flex-direction: column; border-bottom: 2px solid #333; z-index: 2000; }
         .tool-row { display: flex; justify-content: space-around; align-items: center; padding: 8px 5px; gap: 8px; }
         
@@ -16,11 +17,12 @@
             background: #2c2e43; border: 1px solid #444; color: white; padding: 12px; 
             border-radius: 12px; font-size: 24px; cursor: pointer; flex: 1; 
             display: flex; align-items: center; justify-content: center; min-height: 60px;
-            -webkit-user-select: none; user-select: none;
+            -webkit-user-select: none; user-select: none; transition: 0.2s;
         }
         
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.3); box-shadow: 0 0 15px var(--accent); }
 
+        /* Окно выбора толщины */
         #sizeModal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: var(--panel-bg); border: 2px solid var(--accent); padding: 25px;
@@ -30,8 +32,9 @@
         }
         
         #sizeModal input[type="range"] { width: 100%; height: 50px; accent-color: var(--accent); }
-        .preview-circle { background: var(--accent); border-radius: 50%; }
+        .preview-circle { background: var(--accent); border-radius: 50%; min-width: 2px; min-height: 2px; }
 
+        /* Область карты */
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         #bgCanvas { z-index: 10; }
@@ -40,6 +43,7 @@
         
         #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; }
         #startScreen img { width: 100%; height: 100%; object-fit: cover; }
+        
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
 </head>
@@ -59,8 +63,8 @@
     </div>
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')">✥</button>
-        <button id="pencilBtn" class="pressable">✏️</button>
-        <button id="drawBtn" class="pressable active-tool">↗️</button>
+        <button id="pencilBtn">✏️</button>
+        <button id="drawBtn" class="active-tool">↗️</button>
         <button id="eraseBtn" onclick="setTool('erase')">🧽</button>
         <div style="flex:0.5; display:flex; justify-content:center;">
             <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:50px; border:none; background:none;">
@@ -69,10 +73,10 @@
 </div>
 
 <div id="sizeModal">
-    <div style="font-weight: bold; color: var(--accent)">ТОЛЩИНА ЛИНИИ</div>
+    <div style="font-weight: bold; color: var(--accent); letter-spacing: 1px;">ТОЛЩИНА ЛИНИИ</div>
     <div id="sizePreview" class="preview-circle"></div>
     <input type="range" id="lineWidthInput" min="2" max="25" value="8" oninput="updatePreview(this.value)">
-    <button onclick="closeSizeModal()" style="width: 100%; min-height: 50px;">ГОТОВО</button>
+    <button onclick="closeSizeModal()" style="width: 100%; min-height: 50px; font-weight: bold;">ГОТОВО</button>
 </div>
 
 <div id="viewport">
@@ -94,7 +98,7 @@
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
     let globalLineWidth = 8;
 
-    // Инициализация Long Press (удержание) для карандаша и стрелки
+    // Настройка Long Press для инструментов
     [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
         const h = new Hammer(btn);
         h.get('press').set({ time: 500 });
@@ -102,6 +106,7 @@
         h.on('press', () => { setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'); openSizeModal(); });
     });
 
+    // Управление жестами карты
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pinch());
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
@@ -224,11 +229,18 @@
         }
     });
 
-    function clearAll() { if(confirm("Очистить?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
+    function clearAll() { if(confirm("Очистить всё?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
     function saveImage() {
         const temp = document.createElement('canvas'); temp.width = drawCanvas.width; temp.height = drawCanvas.height;
         const tCtx = temp.getContext('2d'); tCtx.drawImage(bgCanvas, 0, 0); tCtx.drawImage(drawCanvas, 0, 0);
-        const link = document.createElement('a'); link.download = 'map.png'; link.href = temp.toDataURL(); link.click();
+        const link = document.createElement('a'); link.download = 'scorpion_map.png'; link.href = temp.toDataURL(); link.click();
+    }
+
+    // РЕГИСТРАЦИЯ SERVICE WORKER ДЛЯ ОФЛАЙН РАБОТЫ
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW error:', err));
+        });
     }
 </script>
 </body>
