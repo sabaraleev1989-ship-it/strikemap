@@ -3,41 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.16.1</title>
+    <title>Scorpion Tactical v.16.2</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        #splash {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 9999; display: flex; 
-            align-items: center; justify-content: center; transition: opacity 0.8s ease;
-        }
+        /* Splash Screen */
+        #splash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; display: flex; align-items: center; justify-content: center; transition: opacity 0.8s ease; }
         #splash img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        .splash-content { position: relative; z-index: 10000; display: flex; flex-direction: column; align-items: center; transform: translateY(150px); }
-        .loading-text { font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 10px #000; animation: blink 1.5s infinite; }
+        .loading-text { position: relative; z-index: 10000; font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); transform: translateY(150px); animation: blink 1.5s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
-        .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 4px; }
-        .tool-row { display: flex; justify-content: space-between; gap: 4px; margin-bottom: 4px; align-items: center; }
+        /* Toolbar UI */
+        .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 6px; }
+        .tool-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+        .tool-row:last-child { margin-bottom: 0; }
         
-        /* Уменьшенные кнопки для компактности */
         button, select { 
             background: #21262d; border: 1px solid #30363d; color: white; 
-            border-radius: 6px; font-size: 14px; min-height: 38px; 
-            flex: 1; display: flex; align-items: center; justify-content: center; 
-            touch-action: manipulation; padding: 2px;
+            border-radius: 10px; font-size: 16px; min-height: 45px; 
+            display: flex; align-items: center; justify-content: center; 
+            touch-action: manipulation; flex: 1;
         }
         
-        #mapPresets { flex: 2.5; font-size: 12px; } /* Карта чуть шире */
-        .btn-gear { flex: 0.8; font-size: 16px; } /* Шестеренка узкая */
-        .btn-action { flex: 0.8; } /* Кнопки undo/redo/del */
-
+        .btn-small { flex: 0.7; } /* Узкие кнопки для истории */
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
-        #sizeSlider { flex: 2; height: 25px; accent-color: var(--accent); }
         
+        #mapPresets { flex: 3; } 
+        #sizeSlider { flex: 2; height: 35px; accent-color: var(--accent); }
+
+        /* Modal */
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
+        /* Viewport & Canvas */
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; pointer-events: none; border: 1px solid #444; }
@@ -47,23 +46,21 @@
 
 <div id="splash">
     <img src="logo3.png" alt="">
-    <div class="splash-content"><div class="loading-text">ЗАГРУЗКА...</div></div>
+    <div class="loading-text">ЗАГРУЗКА...</div>
 </div>
 
 <div class="toolbar">
     <div class="tool-row">
         <select id="mapPresets" onchange="handleMapChange(this.value)">
             <option value="">🗺️ КАРТА</option>
-            <option value="logo1.png">99 Проблем</option>
+            <option value="logo1.png">Ущелье</option>
             <option value="logo2.png">Ахун</option>
         </select>
-        
-        <button class="btn-gear" onclick="document.getElementById('fileInput').click()">⚙️</button>
+        <button class="btn-small" onclick="document.getElementById('fileInput').click()">⚙️</button>
         <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="addNewMap(this)">
-        
-        <button class="btn-action" onclick="undo()">↩️</button>
-        <button class="btn-action" onclick="redo()">↪️</button>
-        <button class="btn-action" onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
+        <button class="btn-small" onclick="undo()">↩️</button>
+        <button class="btn-small" onclick="redo()">↪️</button>
+        <button class="btn-small" onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
 
     <div class="tool-row">
@@ -75,15 +72,15 @@
 
     <div class="tool-row">
         <input type="range" id="sizeSlider" min="10" max="100" value="40" oninput="updateObjSize(this.value)">
-        <input type="color" id="colorPicker" value="#32d74b" style="width:40px; height:40px; border:none; background:none; padding:0;" onchange="updateObjColor(this.value)">
+        <input type="color" id="colorPicker" value="#32d74b" style="width:55px; height:45px; border:none; background:none; padding:0;" onchange="updateObjColor(this.value)">
     </div>
 </div>
 
 <div id="tacticsModal" class="modal">
-    <button onclick="selectTacticShape('scorpion')">Scorp</button>
-    <button onclick="selectTacticShape('octopus')">Octo</button>
+    <button onclick="selectTacticShape('scorpion')">🦂</button>
+    <button onclick="selectTacticShape('octopus')">🐙</button>
     <button onclick="selectTacticShape('99')">99</button>
-    <button onclick="selectTacticShape('knight')">Legion</button>
+    <button onclick="selectTacticShape('knight')">LEGION</button>
     <button onclick="selectTacticShape('bsg')">BSG</button>
     <button onclick="selectTacticShape('flag')">🚩</button>
     <button onclick="selectTacticShape('skull')">💀</button>
@@ -99,6 +96,7 @@
 </div>
 
 <script>
+    // Логика загрузки и управления картами
     window.addEventListener('load', () => {
         loadCustomMaps();
         setTimeout(() => {
@@ -209,8 +207,8 @@
         ctx.translate(obj.x, obj.y);
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.font = `bold ${displaySize}px Arial`;
-        const isDyn = ['99', 'BSG', 'LEGION', '🚩'].includes(content);
-        if (isDyn) {
+        
+        if (['99', 'BSG', 'LEGION', '🚩'].includes(content)) {
             ctx.strokeStyle = "black"; ctx.lineWidth = displaySize / 10;
             ctx.strokeText(content, 0, 0);
             ctx.fillStyle = obj.color;
