@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical PRO</title>
+    <title>Scorpion Tactical ELITE</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg-dark: #0f111a; --panel-bg: #1a1c2c; --accent: #ff9f0a; --danger: #ff453a; --success: #32d74b; }
@@ -14,8 +14,8 @@
         
         button, select { 
             background: #2c2e43; border: 1px solid #444; color: white; padding: 12px; 
-            border-radius: 12px; font-size: 24px; cursor: pointer; flex: 1; 
-            display: flex; align-items: center; justify-content: center; min-height: 60px;
+            border-radius: 12px; font-size: 28px; cursor: pointer; flex: 1; 
+            display: flex; align-items: center; justify-content: center; min-height: 65px;
             -webkit-user-select: none; user-select: none; transition: 0.2s;
         }
         
@@ -29,15 +29,8 @@
             width: 85%; max-width: 320px;
         }
 
-        #tacticsModal { border-color: var(--success); }
         .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
-        .modal-grid button { font-size: 26px; min-height: 60px; padding: 5px; color: #fff !important; }
-        .active-shape { border-color: var(--success); background: rgba(50, 215, 75, 0.3); }
-
         input[type="range"] { width: 100%; height: 50px; accent-color: var(--accent); }
-        #tacticSizeInput { accent-color: var(--success); }
-
-        #tacticPreview { min-height: 80px; display: flex; align-items: center; justify-content: center; }
 
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -67,12 +60,12 @@
         <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
     </div>
     <div class="tool-row">
-        <button id="moveBtn" onclick="setTool('move')">✥</button>
+        <button id="moveBtn" onclick="setTool('move')" style="font-size: 34px;">✥</button>
         <button id="pencilBtn">✏️</button>
         <button id="drawBtn" class="active-tool">↗️</button>
         <button id="tacticsBtn">🧽</button>
         <div style="flex:0.5; display:flex; justify-content:center;">
-            <input type="color" id="colorPicker" value="#32d74b" onchange="syncColor()" style="width:50px; height:50px; border:none; background:none;">
+            <input type="color" id="colorPicker" value="#32d74b" style="width:55px; height:55px; border:none; background:none;">
         </div>
     </div>
 </div>
@@ -80,25 +73,25 @@
 <div id="sizeModal">
     <div style="font-weight: bold; color: var(--accent)">ТОЛЩИНА ЛИНИИ</div>
     <div id="sizePreview" style="background: var(--accent); border-radius: 50%;"></div>
-    <input type="range" id="lineWidthInput" min="2" max="25" value="8" oninput="updatePreview(this.value)">
+    <input type="range" id="lineWidthInput" min="2" max="40" value="8" oninput="updatePreview(this.value)">
     <button onclick="closeSizeModal()">ГОТОВО</button>
 </div>
 
 <div id="tacticsModal">
-    <div style="font-weight: bold; color: var(--success)">ТАКТИКА И ЦВЕТ</div>
+    <div style="font-weight: bold; color: var(--success)">ТАКТИКА</div>
     <div id="tacticPreview"><canvas id="previewCanvas" width="100" height="100"></canvas></div>
     <div class="modal-grid">
-        <button id="shape_erase" onclick="selectTacticShape('erase')" class="active-shape">🧽</button>
-        <button id="shape_flag" onclick="selectTacticShape('flag')">🚩</button>
-        <button id="shape_circle" onclick="selectTacticShape('circle')">⭕</button>
-        <button id="shape_square" onclick="selectTacticShape('square')">⬛</button>
-        <button id="shape_skull" onclick="selectTacticShape('skull')">💀</button>
-        <button id="shape_boom" onclick="selectTacticShape('boom')">💥</button>
-        <button id="shape_shield" onclick="selectTacticShape('shield')">🛡️</button>
-        <button id="shape_star" onclick="selectTacticShape('star')">⭐</button>
+        <button onclick="selectTacticShape('erase')">🧽</button>
+        <button onclick="selectTacticShape('flag')">🚩</button>
+        <button onclick="selectTacticShape('circle')">⭕</button>
+        <button onclick="selectTacticShape('square')">⬛</button>
+        <button onclick="selectTacticShape('skull')">💀</button>
+        <button onclick="selectTacticShape('boom')">💥</button>
+        <button onclick="selectTacticShape('shield')">🛡️</button>
+        <button onclick="selectTacticShape('star')">⭐</button>
     </div>
-    <input type="range" id="tacticSizeInput" min="20" max="150" value="50" oninput="updateTacticPreview(this.value)">
-    <button onclick="closeTacticsModal()" style="width: 100%; min-height: 50px; background: var(--success);">ОК</button>
+    <input type="range" id="tacticSizeInput" min="20" max="200" value="60" oninput="updateTacticPreview(this.value)">
+    <button onclick="closeTacticsModal()" style="width: 100%; background: var(--success);">ОК</button>
 </div>
 
 <div id="viewport">
@@ -117,17 +110,13 @@
 
     let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false, startPoint = {x: 0, y: 0};
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
-    let globalLineWidth = 8, currentTacticShape = 'erase', currentTacticSize = 50;
+    let globalLineWidth = 8, currentTacticShape = 'erase', currentTacticSize = 60;
 
     const shapesMap = { erase:'🧽', flag:'🚩', circle:'⭕', square:'⬛', skull:'💀', boom:'💥', shield:'🛡️', star:'⭐' };
 
-    function syncColor() {
-        if(document.getElementById('tacticsModal').style.display === 'flex') updateTacticPreview(document.getElementById('tacticSizeInput').value);
-    }
-
     function drawVectorShape(ctx, x, y, shape, color, size) {
         ctx.save(); ctx.translate(x, y); ctx.fillStyle = color; ctx.strokeStyle = color;
-        ctx.lineWidth = Math.max(2, size/12); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.lineWidth = Math.max(2, size/10); ctx.lineCap = 'round';
         const s = size / 2;
         if (shape === 'flag') {
             ctx.beginPath(); ctx.moveTo(-s*0.6, s); ctx.lineTo(-s*0.6, -s); ctx.stroke();
@@ -138,8 +127,6 @@
             ctx.beginPath(); for(let i=0; i<12; i++) { let r=(i%2===0)?s:s*0.4; let a=(Math.PI*2/12)*i; ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); } ctx.closePath(); ctx.fill();
         } else if (shape === 'shield') {
             ctx.beginPath(); ctx.moveTo(-s, -s); ctx.lineTo(s, -s); ctx.quadraticCurveTo(s, s*0.5, 0, s); ctx.quadraticCurveTo(-s, s*0.5, -s, -s); ctx.fill();
-        } else if (shape === 'star') {
-            ctx.beginPath(); for(let i=0; i<10; i++) { let r=(i%2===0)?s:s*0.4; let a=(Math.PI*2/10)*i-Math.PI/2; ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r); } ctx.closePath(); ctx.fill();
         } else if (shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.stroke(); }
         else if (shape === 'square') { ctx.strokeRect(-s, -s, size, size); }
         else if (shape === 'erase') { ctx.font = `${size}px Arial`; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText('🧽', 0, 0); }
@@ -170,7 +157,7 @@
         bgImage.onload = () => {
             [bgCanvas, drawCanvas, tempCanvas].forEach(c => { c.width = bgImage.width; c.height = bgImage.height; });
             drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
-            history = []; resetView();
+            history = []; redoStack = []; resetView();
         };
     }
 
@@ -196,19 +183,55 @@
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
+    // История
+    function saveState() {
+        history.push(drawCanvas.toDataURL());
+        if (history.length > 25) history.shift();
+        redoStack = []; 
+    }
+
+    function undo() {
+        if (history.length > 0) {
+            redoStack.push(drawCanvas.toDataURL());
+            let imgData = history.pop();
+            let img = new Image();
+            img.src = imgData;
+            img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); };
+        }
+    }
+
+    function redo() {
+        if (redoStack.length > 0) {
+            history.push(drawCanvas.toDataURL());
+            let imgData = redoStack.pop();
+            let img = new Image();
+            img.src = imgData;
+            img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); };
+        }
+    }
+
     viewport.addEventListener('pointerdown', (e) => {
         if (!bgImage.src || (e.pointerType === 'touch' && !e.isPrimary)) return;
         const p = getCoords(e);
-        if (currentTool === 'move') { lastPosX = posX; lastPosY = posY; return; }
-        isDrawing = true; startPoint = p; saveState();
+        if (currentTool === 'move') { 
+            lastPosX = posX; lastPosY = posY; 
+            startPoint = { x: e.clientX, y: e.clientY };
+            isDrawing = true; return; 
+        }
+        saveState();
+        isDrawing = true; startPoint = p;
         if (currentTool === 'pencil' || (currentTool === 'tactics' && currentTacticShape === 'erase')) {
             drawCtx.beginPath(); drawCtx.moveTo(p.x, p.y);
         }
     });
 
     viewport.addEventListener('pointermove', (e) => {
-        if (currentTool === 'move' && e.buttons === 1) { posX = lastPosX + e.movementX; posY = lastPosY + e.movementY; applyTransform(); return; }
         if (!isDrawing) return;
+        if (currentTool === 'move') {
+            posX = lastPosX + (e.clientX - startPoint.x);
+            posY = lastPosY + (e.clientY - startPoint.y);
+            applyTransform(); return;
+        }
         const p = getCoords(e);
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         if (currentTool === 'pencil') {
@@ -227,6 +250,7 @@
     window.addEventListener('pointerup', (e) => {
         if (!isDrawing) return;
         isDrawing = false;
+        if (currentTool === 'move') return;
         const p = getCoords(e);
         if (currentTool === 'draw') {
             const label = prompt("Позывной:");
@@ -243,15 +267,15 @@
         const cpX = (x1 + x2) / 2 - (y2 - y1) * bend, cpY = (y1 + y2) / 2 + (x2 - x1) * bend;
         ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cpX, cpY, x2, y2); ctx.stroke();
         const angle = Math.atan2(y2 - cpY, x2 - cpX);
-        const headLen = (width * 3) + 12;
+        const headLen = (width * 3) + 15;
         ctx.beginPath(); ctx.moveTo(x2, y2);
         ctx.lineTo(x2 - headLen * Math.cos(angle - Math.PI/6), y2 - headLen * Math.sin(angle - Math.PI/6));
         ctx.lineTo(x2 - headLen * Math.cos(angle + Math.PI/6), y2 - headLen * Math.sin(angle + Math.PI/6));
         ctx.closePath(); ctx.fill();
         if (label) {
-            ctx.save(); ctx.font = `bold ${24/scale}px Arial`; ctx.textAlign = "center";
+            ctx.save(); ctx.font = `bold ${26/scale}px Arial`; ctx.textAlign = "center";
             ctx.translate(cpX, cpY); ctx.rotate(Math.atan2(y2 - y1, x2 - x1));
-            ctx.fillText(label.toUpperCase(), 0, -(width + 12)); ctx.restore();
+            ctx.fillText(label.toUpperCase(), 0, -(width + 15)); ctx.restore();
         }
     }
 
@@ -267,8 +291,6 @@
     new Hammer(document.getElementById('tacticsBtn')).on('press', openTacticsModal);
     document.getElementById('tacticsBtn').onclick = () => setTool('tactics');
 
-    function saveState() { history.push(drawCanvas.toDataURL()); if (history.length > 20) history.shift(); redoStack = []; }
-    function undo() { if (history.length) { redoStack.push(drawCanvas.toDataURL()); let img = new Image(); img.src = history.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
     function clearAll() { if(confirm("Очистить?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
 </script>
 </body>
