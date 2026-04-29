@@ -30,16 +30,14 @@
         }
 
         #tacticsModal { border-color: var(--success); }
-
         .modal-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; width: 100%; }
-        .modal-grid button { font-size: 26px; min-height: 60px; padding: 5px; }
+        .modal-grid button { font-size: 26px; min-height: 60px; padding: 5px; color: #fff !important; }
         .active-shape { border-color: var(--success); background: rgba(50, 215, 75, 0.3); }
 
         input[type="range"] { width: 100%; height: 50px; accent-color: var(--accent); }
         #tacticSizeInput { accent-color: var(--success); }
 
-        .preview-circle { background: var(--accent); border-radius: 50%; }
-        #tacticPreview { background: none; display: flex; align-items: center; justify-content: center; min-height: 80px; }
+        #tacticPreview { min-height: 80px; display: flex; align-items: center; justify-content: center; }
 
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
@@ -47,8 +45,6 @@
         #drawCanvas { z-index: 20; }
         #tempCanvas { z-index: 30; pointer-events: none; }
         
-        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; }
-        #startScreen img { width: 100%; height: 100%; object-fit: cover; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
 </head>
@@ -71,7 +67,7 @@
         <button id="drawBtn" class="active-tool">↗️</button>
         <button id="tacticsBtn">🧽</button>
         <div style="flex:0.5; display:flex; justify-content:center;">
-            <input type="color" id="colorPicker" value="#32d74b" onchange="syncColor()" style="width:50px; height:50px; border:none; background:none;">
+            <input type="color" id="colorPicker" value="#32d74b" onchange="syncColor()" style="width:50px; height:50px; border:none; background:none; cursor:pointer;">
         </div>
     </div>
 </div>
@@ -85,7 +81,7 @@
 
 <div id="tacticsModal">
     <div style="font-weight: bold; color: var(--success)">ТАКТИКА И ЦВЕТ</div>
-    <div id="tacticPreview">🧽</div>
+    <div id="tacticPreview"><canvas id="previewCanvas" width="100" height="100"></canvas></div>
     <div class="modal-grid">
         <button id="shape_erase" onclick="selectTacticShape('erase')" class="active-shape">🧽</button>
         <button id="shape_flag" onclick="selectTacticShape('flag')">🚩</button>
@@ -96,12 +92,11 @@
         <button id="shape_shield" onclick="selectTacticShape('shield')">🛡️</button>
         <button id="shape_star" onclick="selectTacticShape('star')">⭐</button>
     </div>
-    <input type="range" id="tacticSizeInput" min="15" max="120" value="45" oninput="updateTacticPreview(this.value)">
+    <input type="range" id="tacticSizeInput" min="20" max="150" value="50" oninput="updateTacticPreview(this.value)">
     <button onclick="closeTacticsModal()" style="width: 100%; min-height: 50px; background: var(--success);">ОК</button>
 </div>
 
 <div id="viewport">
-    <div id="startScreen"><img src="logo3.png"></div>
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
     <canvas id="tempCanvas"></canvas>
@@ -110,29 +105,117 @@
 
 <script>
     const viewport = document.getElementById('viewport');
-    const startScreen = document.getElementById('startScreen');
     const bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
-    
-    const sizeModal = document.getElementById('sizeModal'), sizeInput = document.getElementById('lineWidthInput'), sizePreview = document.getElementById('sizePreview');
-    const tacticsModal = document.getElementById('tacticsModal'), tacticSizeInput = document.getElementById('tacticSizeInput'), tacticPreview = document.getElementById('tacticPreview');
     const colorPicker = document.getElementById('colorPicker');
+    const previewCanvas = document.getElementById('previewCanvas'), pCtx = previewCanvas.getContext('2d');
 
     let bgImage = new Image(), currentTool = 'draw', history = [], redoStack = [], isDrawing = false, startPoint = {x: 0, y: 0};
     let scale = 1, posX = 0, posY = 0, lastScale = 1, lastPosX = 0, lastPosY = 0;
-    
-    let globalLineWidth = 8;
-    let currentTacticShape = 'erase';
-    let currentTacticSize = 45;
+    let globalLineWidth = 8, currentTacticShape = 'erase', currentTacticSize = 50;
 
-    const shapesMap = {
-        erase: '🧽', flag: '🚩', circle: '⭕', square: '⬛', 
-        skull: '💀', boom: '💥', shield: '🛡️', star: '⭐'
-    };
+    const shapesMap = { erase:'🧽', flag:'🚩', circle:'⭕', square:'⬛', skull:'💀', boom:'💥', shield:'🛡️', star:'⭐' };
 
+    function syncColor() {
+        if(sizeModal.style.display === 'flex') updatePreview(document.getElementById('lineWidthInput').value);
+        if(tacticsModal.style.display === 'flex') updateTacticPreview(document.getElementById('tacticSizeInput').value);
+    }
+
+    // РИСОВАНИЕ ТАКТИЧЕСКИХ ЗНАКОВ (ВЕКТОРНО)
+    function drawVectorShape(ctx, x, y, shape, color, size) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = color;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = Math.max(2, size/12);
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        const s = size / 2;
+
+        if (shape === 'flag') {
+            ctx.beginPath();
+            ctx.moveTo(-s*0.6, s); ctx.lineTo(-s*0.6, -s); // Флагшток
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(-s*0.6, -s); ctx.lineTo(s, -s/2); ctx.lineTo(-s*0.6, 0);
+            ctx.closePath(); ctx.fill();
+        } else if (shape === 'skull') {
+            ctx.beginPath();
+            ctx.arc(0, -s*0.2, s*0.7, Math.PI, 0); // Лоб
+            ctx.lineTo(s*0.4, s*0.6); ctx.lineTo(-s*0.4, s*0.6);
+            ctx.closePath(); ctx.fill();
+            ctx.fillStyle = '#000'; // Глаза
+            ctx.beginPath(); ctx.arc(-s*0.3, 0, s*0.2, 0, 7); ctx.fill();
+            ctx.beginPath(); ctx.arc(s*0.3, 0, s*0.2, 0, 7); ctx.fill();
+        } else if (shape === 'boom') {
+            ctx.beginPath();
+            for(let i=0; i<12; i++) {
+                let r = (i%2===0) ? s : s*0.4;
+                let a = (Math.PI*2/12)*i;
+                ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+            }
+            ctx.closePath(); ctx.fill();
+        } else if (shape === 'shield') {
+            ctx.beginPath();
+            ctx.moveTo(-s, -s); ctx.lineTo(s, -s);
+            ctx.quadraticCurveTo(s, s*0.5, 0, s);
+            ctx.quadraticCurveTo(-s, s*0.5, -s, -s);
+            ctx.fill();
+        } else if (shape === 'star') {
+            ctx.beginPath();
+            for(let i=0; i<10; i++) {
+                let r = (i%2===0) ? s : s*0.4;
+                let a = (Math.PI*2/10)*i - Math.PI/2;
+                ctx.lineTo(Math.cos(a)*r, Math.sin(a)*r);
+            }
+            ctx.closePath(); ctx.fill();
+        } else if (shape === 'circle') {
+            ctx.beginPath(); ctx.arc(0, 0, s, 0, 7); ctx.stroke();
+        } else if (shape === 'square') {
+            ctx.strokeRect(-s, -s, size, size);
+        } else if (shape === 'erase') {
+            ctx.font = `${size}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('🧽', 0, 0);
+        }
+        ctx.restore();
+    }
+
+    // ИНТЕРФЕЙС
+    function setTool(tool) {
+        currentTool = tool;
+        ['drawBtn', 'pencilBtn', 'tacticsBtn', 'moveBtn'].forEach(id => {
+            document.getElementById(id).classList.toggle('active-tool', id.startsWith(tool));
+        });
+        if (tool === 'tactics') document.getElementById('tacticsBtn').innerText = shapesMap[currentTacticShape];
+    }
+
+    function openSizeModal() { document.getElementById('sizeModal').style.display = 'flex'; updatePreview(globalLineWidth); }
+    function closeSizeModal() { globalLineWidth = parseInt(document.getElementById('lineWidthInput').value); document.getElementById('sizeModal').style.display = 'none'; }
+    function updatePreview(val) {
+        document.getElementById('sizePreview').style.width = val + 'px';
+        document.getElementById('sizePreview').style.height = val + 'px';
+        document.getElementById('sizePreview').style.backgroundColor = colorPicker.value;
+    }
+
+    function openTacticsModal() { document.getElementById('tacticsModal').style.display = 'flex'; updateTacticPreview(currentTacticSize); }
+    function closeTacticsModal() { currentTacticSize = parseInt(document.getElementById('tacticSizeInput').value); document.getElementById('tacticsModal').style.display = 'none'; setTool('tactics'); }
+
+    function selectTacticShape(shape) {
+        currentTacticShape = shape;
+        document.querySelectorAll('.modal-grid button').forEach(b => b.classList.remove('active-shape'));
+        document.getElementById('shape_' + shape).classList.add('active-shape');
+        updateTacticPreview(document.getElementById('tacticSizeInput').value);
+    }
+
+    function updateTacticPreview(val) {
+        pCtx.clearRect(0, 0, 100, 100);
+        drawVectorShape(pCtx, 50, 50, currentTacticShape, colorPicker.value, val/1.5);
+    }
+
+    // HAMMER & КАНВАС (ОСНОВНОЕ)
     [document.getElementById('pencilBtn'), document.getElementById('drawBtn')].forEach(btn => {
-        const h = new Hammer(btn);
-        h.get('press').set({ time: 500 });
+        const h = new Hammer(btn); h.get('press').set({ time: 500 });
         h.on('tap', () => setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'));
         h.on('press', () => { setTool(btn.id === 'pencilBtn' ? 'pencil' : 'draw'); openSizeModal(); });
     });
@@ -142,50 +225,8 @@
     hTactics.on('tap', () => setTool('tactics'));
     hTactics.on('press', () => { setTool('tactics'); openTacticsModal(); });
 
-    const mc = new Hammer.Manager(viewport);
-    mc.add(new Hammer.Pinch());
-    mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
-
-    function setTool(tool) {
-        currentTool = tool;
-        ['drawBtn', 'pencilBtn', 'tacticsBtn', 'moveBtn'].forEach(id => {
-            const b = document.getElementById(id);
-            if(b) b.classList.toggle('active-tool', id.startsWith(tool));
-        });
-        if (tool === 'tactics') document.getElementById('tacticsBtn').innerText = shapesMap[currentTacticShape];
-    }
-
-    function syncColor() {
-        if(sizeModal.style.display === 'flex') updatePreview(sizeInput.value);
-        if(tacticsModal.style.display === 'flex') updateTacticPreview(tacticSizeInput.value);
-    }
-
-    function openSizeModal() { sizeModal.style.display = 'flex'; updatePreview(globalLineWidth); }
-    function closeSizeModal() { globalLineWidth = parseInt(sizeInput.value); sizeModal.style.display = 'none'; }
-    function updatePreview(val) {
-        sizePreview.style.width = val + 'px'; sizePreview.style.height = val + 'px';
-        sizePreview.style.backgroundColor = colorPicker.value;
-    }
-
-    function openTacticsModal() { tacticsModal.style.display = 'flex'; updateTacticPreview(currentTacticSize); }
-    function closeTacticsModal() { currentTacticSize = parseInt(tacticSizeInput.value); tacticsModal.style.display = 'none'; setTool('tactics'); }
-
-    function selectTacticShape(shape) {
-        currentTacticShape = shape;
-        document.querySelectorAll('.modal-grid button').forEach(b => b.classList.remove('active-shape'));
-        document.getElementById('shape_' + shape).classList.add('active-shape');
-        updateTacticPreview(tacticSizeInput.value);
-    }
-
-    function updateTacticPreview(val) {
-        tacticPreview.innerText = shapesMap[currentTacticShape];
-        tacticPreview.style.fontSize = (val * 0.8) + 'px';
-        tacticPreview.style.color = (currentTacticShape === 'erase') ? '#fff' : colorPicker.value;
-    }
-
     function loadMap(url) {
-        if (!url) { startScreen.style.visibility = 'visible'; return; }
-        startScreen.style.visibility = 'hidden';
+        if (!url) return;
         bgImage.src = url;
         bgImage.onload = () => {
             [bgCanvas, drawCanvas, tempCanvas].forEach(c => { c.width = bgImage.width; c.height = bgImage.height; });
@@ -230,7 +271,6 @@
         if (!isDrawing) return;
         const p = getCoords(e);
         tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
-        
         if (currentTool === 'pencil') {
             drawCtx.lineWidth = globalLineWidth / scale; drawCtx.strokeStyle = colorPicker.value;
             drawCtx.lineCap = 'round'; drawCtx.lineTo(p.x, p.y); drawCtx.stroke();
@@ -255,7 +295,7 @@
             drawArrow(drawCtx, startPoint.x, startPoint.y, p.x, p.y, colorPicker.value, label, bend, globalLineWidth / scale);
             tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
         } else if (currentTool === 'tactics' && currentTacticShape !== 'erase') {
-            drawTacticShape(drawCtx, p.x, p.y, currentTacticShape, colorPicker.value, currentTacticSize / scale);
+            drawVectorShape(drawCtx, p.x, p.y, currentTacticShape, colorPicker.value, currentTacticSize / scale);
         }
     });
 
@@ -276,35 +316,22 @@
             ctx.fillText(label.toUpperCase(), 0, -(width + 12)); ctx.restore();
         }
     }
-    
-    function drawTacticShape(ctx, x, y, shape, color, size) {
-        ctx.save();
-        ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineWidth = 4 / scale;
-        if (['flag', 'skull', 'boom', 'shield', 'star'].includes(shape)) {
-            ctx.font = `${size}px Arial`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText(shapesMap[shape], x, y);
-        } else if (shape === 'circle') {
-            ctx.beginPath(); ctx.arc(x, y, size / 2, 0, Math.PI * 2); ctx.stroke();
-        } else if (shape === 'square') {
-            ctx.strokeRect(x - size / 2, y - size / 2, size, size);
-        }
-        ctx.restore();
-    }
 
     function saveState() { history.push(drawCanvas.toDataURL()); if (history.length > 20) history.shift(); redoStack = []; }
     function undo() { if (history.length) { redoStack.push(drawCanvas.toDataURL()); let img = new Image(); img.src = history.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
     function redo() { if (redoStack.length) { history.push(drawCanvas.toDataURL()); let img = new Image(); img.src = redoStack.pop(); img.onload = () => { drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height); drawCtx.drawImage(img, 0, 0); }; } }
 
-    mc.on("pinchstart panstart", (e) => { lastScale = scale; lastPosX = posX; lastPosY = posY; });
+    const mc = new Hammer.Manager(viewport);
+    mc.add(new Hammer.Pinch()); mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
     mc.on("pinchmove panmove", (e) => {
         if (currentTool === 'move' || e.pointers.length >= 2) {
             if (e.type === 'pinchmove') scale = Math.max(0.1, Math.min(lastScale * e.scale, 8));
             posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY; applyTransform();
         }
     });
+    mc.on("pinchstart panstart", () => { lastScale = scale; lastPosX = posX; lastPosY = posY; });
 
-    function clearAll() { if(confirm("Очистить нарисованное?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
-    if ('serviceWorker' in navigator) { window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(err => console.log(err)); }); }
+    function clearAll() { if(confirm("Очистить всё?")) { saveState(); drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); } }
 </script>
 </body>
 </html>
