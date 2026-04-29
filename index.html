@@ -3,12 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical Color Fix</title>
+    <title>Scorpion Tactical Pro v.9</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
+        /* ЗАСТАВКА (SPLASH SCREEN) */
+        #splash {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 9999; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; transition: opacity 0.8s ease;
+        }
+        #splash img { width: 180px; height: auto; margin-bottom: 20px; filter: drop-shadow(0 0 15px var(--accent)); }
+        #splash h1 { color: var(--accent); font-size: 24px; letter-spacing: 3px; margin: 0; }
+        #splash .loader { width: 40px; height: 40px; border: 3px solid #333; border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin-top: 20px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ИНТЕРФЕЙС ПРИЛОЖЕНИЯ */
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
         
@@ -29,15 +41,18 @@
         }
         #tacticsModal { grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
-        input[type="text"] { background: #0d1117; border: 1px solid #30363d; color: white; padding: 10px; border-radius: 5px; }
-        input[type="file"] { display: none; }
-
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
 </head>
 <body>
+
+<div id="splash">
+    <img src="logo1.png" alt="Scorpion Logo">
+    <h1>SCORPION TACTICAL</h1>
+    <div class="loader"></div>
+</div>
 
 <div class="toolbar">
     <div class="tool-row">
@@ -80,11 +95,10 @@
 </div>
 
 <div id="settingsModal" class="modal">
-    <h3 style="margin:0; text-align:center; color:var(--accent);">ДОБАВИТЬ КАРТУ</h3>
-    <input type="text" id="newMapName" placeholder="Название">
-    <label for="fileInput" class="file-label">📁 ФОТО ИЗ ГАЛЕРЕИ</label>
-    <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(this)">
-    <button id="saveMapBtn" onclick="saveCustomMap()" style="background:var(--accent); color:black; font-weight:bold; display:none;">СОХРАНИТЬ</button>
+    <h3 style="margin:0; text-align:center; color:var(--accent);">КАРТА</h3>
+    <input type="text" id="newMapName" placeholder="Название полигона">
+    <input type="file" id="fileInput" accept="image/*" style="display:none;" onchange="handleFileUpload(this)">
+    <button onclick="document.getElementById('fileInput').click()">📁 ЗАГРУЗИТЬ ФОТО</button>
     <button onclick="document.getElementById('settingsModal').style.display='none'">ЗАКРЫТЬ</button>
 </div>
 
@@ -96,25 +110,24 @@
 </div>
 
 <script>
+    // Удаление заставки
+    window.addEventListener('load', () => {
+        setTimeout(() => {
+            const s = document.getElementById('splash');
+            s.style.opacity = '0';
+            setTimeout(() => s.style.display = 'none', 800);
+        }, 2500);
+    });
+
     const viewport = document.getElementById('viewport'), 
           bgCanvas = document.getElementById('bgCanvas'), 
           drawCanvas = document.getElementById('drawCanvas'), 
           tempCanvas = document.getElementById('tempCanvas');
-    const bgCtx = bgCanvas.getContext('2d'), 
-          drawCtx = drawCanvas.getContext('2d'), 
-          tempCtx = tempCanvas.getContext('2d');
+    const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
     
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
-
-    // Локальное хранилище карт
-    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_v7')) || [];
-    function updateMapDropdown() {
-        const select = document.getElementById('mapPresets');
-        select.innerHTML = '<option value="">🗺️ ПОЛИГОН</option><option value="logo1.png">99 Проблем</option><option value="logo2.png">Ахун</option>';
-        customMaps.forEach(m => { let opt = document.createElement('option'); opt.value = m.url; opt.innerText = m.name; select.appendChild(opt); });
-    }
 
     function handleMapChange(url) {
         if (!url) return;
@@ -153,10 +166,8 @@
         objects.forEach(obj => {
             drawCtx.save();
             if(obj === selectedObj) {
-                drawCtx.shadowBlur = 10; drawCtx.shadowColor = "white";
-                drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 3/scale;
-                const r = obj.size;
-                drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
+                drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 4/scale;
+                drawCtx.strokeRect(obj.x - obj.size/2, obj.y - obj.size/2, obj.size, obj.size);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
             else if(obj.type === 'arrow') drawArrow(drawCtx, obj);
@@ -165,33 +176,32 @@
         });
     }
 
-    // ИСПРАВЛЕННАЯ ОТРИСОВКА: Принудительное окрашивание
     function drawTactic(ctx, obj) {
-        const map = { 
-            scorpion: '🦂', octopus: '🐙', '99': '99', 
-            knight: 'LEGION', bsg: 'BSG', flag: '🚩', 
-            skull: '💀', boom: '💥', star: '⭐', sun: '☀️' 
-        };
+        const map = { scorpion: '🦂', octopus: '🐙', '99': '99', knight: 'LEGION', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', star: '⭐', sun: '☀️' };
         const content = map[obj.shape] || obj.shape;
-        
+        const isText = ['99', 'BSG', 'LEGION'].includes(content);
+
         ctx.save();
         ctx.translate(obj.x, obj.y);
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = `bold ${obj.size}px Arial`;
 
-        // Шаг 1: Рисуем черную обводку (будет видна вокруг цвета)
-        ctx.strokeStyle = "black";
-        ctx.lineWidth = obj.size / 6;
-        ctx.strokeText(content, 0, 0);
-
-        // Шаг 2: Создаем временный слой для перекрашивания эмодзи
-        // Используем глобальное наложение, чтобы закрасить пиксели любым цветом
-        ctx.fillText(content, 0, 0); 
-        ctx.globalCompositeOperation = "source-in"; 
-        ctx.fillStyle = obj.color;
-        ctx.fillRect(-obj.size, -obj.size, obj.size*2, obj.size*2);
-        
+        if (isText) {
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = obj.size / 8;
+            ctx.strokeText(content, 0, 0);
+            ctx.fillStyle = obj.color;
+            ctx.fillText(content, 0, 0);
+        } else {
+            ctx.fillStyle = obj.color;
+            ctx.shadowColor = "black"; ctx.shadowBlur = 4;
+            ctx.fillText(content, 0, 0);
+            // Дополнительный слой для "прокраски" эмодзи цветом
+            ctx.globalCompositeOperation = "source-atop";
+            ctx.globalAlpha = 0.6;
+            ctx.fillRect(-obj.size, -obj.size, obj.size*2, obj.size*2);
+        }
         ctx.restore();
     }
 
@@ -199,10 +209,10 @@
         ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/6;
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
-        const head = obj.size / 2;
+        const h = obj.size / 2;
         ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
-        ctx.lineTo(obj.x2 - head * Math.cos(angle - 0.5), obj.y2 - head * Math.sin(angle - 0.5));
-        ctx.lineTo(obj.x2 - head * Math.cos(angle + 0.5), obj.y2 - head * Math.sin(angle + 0.5));
+        ctx.lineTo(obj.x2 - h * Math.cos(angle - 0.5), obj.y2 - h * Math.sin(angle - 0.5));
+        ctx.lineTo(obj.x2 - h * Math.cos(angle + 0.5), obj.y2 - h * Math.sin(angle + 0.5));
         ctx.fill();
         if(obj.label) {
             ctx.font = `bold ${obj.size/1.5}px Arial`; ctx.textAlign = "center";
@@ -228,17 +238,17 @@
     viewport.addEventListener('pointerdown', (e) => {
         if(!bgImage.src) return;
         const p = getCoords(e);
-        const color = document.getElementById('colorPicker').value;
         if(currentTool === 'move') {
             selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < (o.size || 50)/scale);
             if(selectedObj) {
                 document.getElementById('sizeSlider').value = selectedObj.size;
-                selectedObj.color = color; // Смена цвета при выделении
+                selectedObj.color = document.getElementById('colorPicker').value;
             }
             render(); return;
         }
-        isDrawing = true; startP = p; saveState();
-        if(currentTool === 'pencil') objects.push({ type:'pencil', color:color, width:document.getElementById('sizeSlider').value/10/scale, points:[p] });
+        isDrawing = true; startP = p; 
+        saveState();
+        if(currentTool === 'pencil') objects.push({ type:'pencil', color:document.getElementById('colorPicker').value, width:document.getElementById('sizeSlider').value/10/scale, points:[p] });
     });
 
     viewport.addEventListener('pointermove', (e) => {
@@ -257,11 +267,11 @@
         const p = getCoords(e);
         const color = document.getElementById('colorPicker').value;
         const size = parseFloat(document.getElementById('sizeSlider').value);
+
         if(currentTool === 'draw') {
             const label = prompt("Позывной:");
             objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: label });
-        }
-        else if(currentTool === 'tactics') {
+        } else if(currentTool === 'tactics') {
             objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:size, color:color });
         }
         tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
@@ -291,8 +301,6 @@
     function saveState() { history.push(JSON.stringify(objects)); redoStack = []; }
     function undo() { if(history.length) { redoStack.push(JSON.stringify(objects)); objects = JSON.parse(history.pop()); render(); } }
     function redo() { if(redoStack.length) { history.push(JSON.stringify(objects)); objects = JSON.parse(redoStack.pop()); render(); } }
-
-    updateMapDropdown();
 </script>
 </body>
 </html>
