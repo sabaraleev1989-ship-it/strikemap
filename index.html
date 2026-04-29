@@ -10,13 +10,14 @@
         body { margin: 0; padding: 0; background: var(--bg-dark); color: #fff; font-family: 'Segoe UI', sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
         .toolbar { background: var(--panel-bg); display: flex; flex-direction: column; border-bottom: 2px solid #333; z-index: 2000; }
-        .tool-row { display: flex; justify-content: space-around; align-items: center; padding: 8px 5px; gap: 8px; }
+        .tool-row { display: flex; justify-content: space-around; align-items: center; padding: 8px 5px; gap: 6px; }
         
         button, select { 
-            background: #2c2e43; border: 1px solid #444; color: white; padding: 12px; 
-            border-radius: 12px; font-size: 28px; cursor: pointer; flex: 1; 
-            display: flex; align-items: center; justify-content: center; min-height: 65px;
+            background: #2c2e43; border: 1px solid #444; color: white; padding: 10px; 
+            border-radius: 12px; font-size: 26px; cursor: pointer; flex: 1; 
+            display: flex; align-items: center; justify-content: center; min-height: 60px;
             -webkit-user-select: none; user-select: none; transition: 0.2s;
+            min-width: 0; /* Предотвращает раздувание кнопок */
         }
         
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.3); box-shadow: 0 0 15px var(--accent); }
@@ -38,7 +39,7 @@
         #drawCanvas { z-index: 20; }
         #tempCanvas { z-index: 30; pointer-events: none; }
         
-        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+        #startScreen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg-dark); z-index: 500; display: flex; align-items: center; justify-content: center; }
         #startScreen img { width: 100%; height: 100%; object-fit: cover; }
         
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 5px 15px; border-radius: 20px; font-size: 14px; z-index: 100; border: 1px solid #444; pointer-events: none; }
@@ -50,22 +51,22 @@
 
 <div class="toolbar">
     <div class="tool-row">
-        <select id="mapPresets" onchange="loadMap(this.value)">
+        <select id="mapPresets" onchange="handleMapChange(this.value)">
             <option value="">🗺️ ПОЛИГОН</option>
             <option value="logo1.png">99 Проблем</option>
             <option value="logo2.png">Ахун</option>
         </select>
-        <button onclick="undo()">↩️</button>
-        <button onclick="redo()">↪️</button>
-        <button onclick="clearAll()" style="color: var(--danger)">🗑️</button>
+        <button onclick="undo()" title="Назад">↩️</button>
+        <button onclick="redo()" title="Вперед">↪️</button>
+        <button onclick="clearAll()" style="color: var(--danger); flex: 0.7;">🗑️</button>
     </div>
     <div class="tool-row">
-        <button id="moveBtn" onclick="setTool('move')" style="font-size: 34px;">✥</button>
+        <button id="moveBtn" onclick="setTool('move')" style="font-size: 32px;">✥</button>
         <button id="pencilBtn">✏️</button>
         <button id="drawBtn" class="active-tool">↗️</button>
         <button id="tacticsBtn">🧽</button>
-        <div style="flex:0.5; display:flex; justify-content:center;">
-            <input type="color" id="colorPicker" value="#32d74b" style="width:55px; height:55px; border:none; background:none;">
+        <div style="flex:0.6; display:flex; justify-content:center; align-items:center;">
+            <input type="color" id="colorPicker" value="#32d74b" style="width:50px; height:50px; border:2px solid #444; border-radius:50%; background:none; padding:0; overflow:hidden;">
         </div>
     </div>
 </div>
@@ -135,7 +136,10 @@
 
     function setTool(tool) {
         currentTool = tool;
-        ['drawBtn', 'pencilBtn', 'tacticsBtn', 'moveBtn'].forEach(id => document.getElementById(id).classList.toggle('active-tool', id.startsWith(tool)));
+        ['drawBtn', 'pencilBtn', 'tacticsBtn', 'moveBtn'].forEach(id => {
+            const btn = document.getElementById(id);
+            if(btn) btn.classList.toggle('active-tool', id.startsWith(tool));
+        });
         if (tool === 'tactics') document.getElementById('tacticsBtn').innerText = shapesMap[currentTacticShape];
     }
 
@@ -150,8 +154,20 @@
     function selectTacticShape(shape) { currentTacticShape = shape; updateTacticPreview(document.getElementById('tacticSizeInput').value); }
     function updateTacticPreview(val) { pCtx.clearRect(0,0,100,100); drawVectorShape(pCtx, 50, 50, currentTacticShape, colorPicker.value, val/1.5); }
 
+    function handleMapChange(url) {
+        if (url === "") {
+            // Возврат к заставке
+            document.getElementById('startScreen').style.display = 'flex';
+            bgImage = new Image();
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            history = []; redoStack = [];
+            return;
+        }
+        loadMap(url);
+    }
+
     function loadMap(url) {
-        if (!url) return;
         document.getElementById('startScreen').style.display = 'none';
         bgImage.src = url;
         bgImage.onload = () => {
@@ -162,6 +178,7 @@
     }
 
     function resetView() {
+        if (!bgImage.width) return;
         const sRatio = viewport.clientWidth / viewport.clientHeight;
         const mRatio = bgImage.width / bgImage.height;
         scale = (mRatio > sRatio) ? (viewport.clientWidth / bgImage.width) : (viewport.clientHeight / bgImage.height);
@@ -174,7 +191,7 @@
         const tr = `translate(${posX}px, ${posY}px) scale(${scale})`;
         [bgCanvas, drawCanvas, tempCanvas].forEach(c => c.style.transform = tr);
         bgCtx.clearRect(0,0, bgCanvas.width, bgCanvas.height);
-        if (bgImage.src) bgCtx.drawImage(bgImage, 0, 0);
+        if (bgImage.src && bgImage.complete) bgCtx.drawImage(bgImage, 0, 0);
         document.getElementById('zoomVal').innerText = `Масштаб: ${Math.round(scale * 100)}%`;
     }
 
@@ -183,7 +200,6 @@
         return { x: (e.clientX - rect.left - posX) / scale, y: (e.clientY - rect.top - posY) / scale };
     }
 
-    // История
     function saveState() {
         history.push(drawCanvas.toDataURL());
         if (history.length > 25) history.shift();
