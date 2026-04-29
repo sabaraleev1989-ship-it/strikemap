@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.16.3</title>
+    <title>Scorpion Tactical v.16.4</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
@@ -20,15 +20,15 @@
         
         button, select { 
             background: #21262d; border: 1px solid #30363d; color: white; 
-            border-radius: 10px; font-size: 16px; min-height: 45px; 
+            border-radius: 10px; font-size: 15px; min-height: 45px; 
             display: flex; align-items: center; justify-content: center; 
             touch-action: manipulation; flex: 1;
         }
         
-        .btn-small { flex: 0.7; }
+        .btn-small { flex: 0.6; }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
         
-        #mapPresets { flex: 3; } 
+        #mapPresets { flex: 2.5; } 
         #sizeSlider { flex: 2; height: 35px; accent-color: var(--accent); }
 
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -49,14 +49,16 @@
     <div class="tool-row">
         <select id="mapPresets" onchange="handleMapChange(this.value)">
             <option value="">🗺️ КАРТА</option>
-            <option value="logo1.png">База 99</option>
-            <option value="logo2.png">Ахун</option>
+            <option value="logo1.png" data-fixed="true">База 99</option>
+            <option value="logo2.png" data-fixed="true">Ахун</option>
         </select>
         <button class="btn-small" onclick="document.getElementById('fileInput').click()">⚙️</button>
+        <button class="btn-small" onclick="deleteCurrentMap()" title="Удалить карту">❌</button>
+        
         <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="addNewMap(this)">
+        
         <button class="btn-small" onclick="undo()">↩️</button>
         <button class="btn-small" onclick="redo()">↪️</button>
-        <button class="btn-small" onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
 
     <div class="tool-row">
@@ -64,6 +66,7 @@
         <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
         <button id="drawBtn" onclick="setTool('draw')">↗️</button>
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
+        <button class="btn-small" onclick="if(confirm('Очистить рисунки?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
 
     <div class="tool-row">
@@ -122,13 +125,37 @@
                 const opt = document.createElement('option');
                 opt.value = url; opt.text = name;
                 select.appendChild(opt);
+                
                 let saved = JSON.parse(localStorage.getItem('st_maps') || '[]');
                 saved.push({name, url});
                 localStorage.setItem('st_maps', JSON.stringify(saved));
+                
                 select.value = url;
                 handleMapChange(url);
             };
             reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function deleteCurrentMap() {
+        const select = document.getElementById('mapPresets');
+        const selectedOpt = select.options[select.selectedIndex];
+        
+        if (!select.value || selectedOpt.getAttribute('data-fixed') === 'true') {
+            alert("Эту карту нельзя удалить.");
+            return;
+        }
+
+        if (confirm(`Удалить карту "${selectedOpt.text}"?`)) {
+            let saved = JSON.parse(localStorage.getItem('st_maps') || '[]');
+            saved = saved.filter(m => m.url !== select.value);
+            localStorage.setItem('st_maps', JSON.stringify(saved));
+            
+            selectedOpt.remove();
+            select.value = "";
+            bgCtx.clearRect(0, 0, bgCanvas.width, bgCanvas.height);
+            bgImage = new Image();
+            render();
         }
     }
 
