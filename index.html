@@ -3,37 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical v.13</title>
+    <title>Scorpion Tactical v.14</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        /* ЗАСТАВКА */
+        /* ПОЛНОЭКРАННАЯ ЗАСТАВКА */
         #splash {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: #000; z-index: 9999; display: flex; 
             align-items: center; justify-content: center; transition: opacity 0.8s ease;
         }
         #splash img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
-        .splash-content { position: relative; z-index: 10000; display: flex; flex-direction: column; align-items: center; top: 25%; }
+        .splash-content { position: relative; z-index: 10000; display: flex; flex-direction: column; align-items: center; transform: translateY(150px); }
         .loading-text { font-size: 18px; font-weight: bold; letter-spacing: 3px; color: var(--accent); text-shadow: 0 0 10px #000; animation: blink 1.5s infinite; }
         @keyframes blink { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
 
         /* ИНТЕРФЕЙС */
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
-        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; min-height: 45px; flex: 1; display: flex; align-items: center; justify-content: center; }
+        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 16px; min-height: 45px; flex: 1; display: flex; align-items: center; justify-content: center; touch-action: manipulation; }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
         
-        /* ШКАЛА (ОГРАНИЧЕНА ДО 75) */
         #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
         
-        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; }
-        #tacticsModal { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        /* МОДАЛЬНОЕ ОКНО ФИГУР */
+        .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 15px; border-radius: 15px; z-index: 3000; display: none; width: 85%; max-width: 400px; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; pointer-events: none; }
+        .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; pointer-events: none; border: 1px solid #444; }
     </style>
 </head>
 <body>
@@ -61,7 +61,7 @@
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
     </div>
     <div class="tool-row">
-        <input type="range" id="sizeSlider" min="5" max="75" value="30" oninput="updateObjSize(this.value)">
+        <input type="range" id="sizeSlider" min="5" max="75" value="35" oninput="updateObjSize(this.value)">
         <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;" onchange="updateObjColor(this.value)">
     </div>
 </div>
@@ -86,6 +86,7 @@
 </div>
 
 <script>
+    // ИСЧЕЗНОВЕНИЕ ЗАСТАВКИ
     window.addEventListener('load', () => {
         setTimeout(() => {
             const s = document.getElementById('splash');
@@ -124,15 +125,30 @@
         document.getElementById('zoomVal').innerText = `Зум: ${Math.round(scale * 100)}%`;
     }
 
+    // УПРАВЛЕНИЕ ОКНОМ ФИГУР (ТОГГЛ)
     function setTool(t) {
+        const modal = document.getElementById('tacticsModal');
+        if (t === 'tactics') {
+            if (modal.style.display === 'grid') {
+                modal.style.display = 'none';
+                return; 
+            }
+            modal.style.display = 'grid';
+        } else {
+            modal.style.display = 'none';
+        }
+
         currentTool = t;
         document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
-        document.getElementById(t+'Btn').classList.add('active-tool');
-        document.getElementById('tacticsModal').style.display = (t === 'tactics') ? 'grid' : 'none';
-        if(t !== 'move') { selectedObj = null; render(); }
+        document.getElementById(t + 'Btn')?.classList.add('active-tool');
+        if (t !== 'move') { selectedObj = null; render(); }
     }
 
-    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
+    function selectTacticShape(s) { 
+        currentTacticShape = s; 
+        document.getElementById('tacticsModal').style.display = 'none'; 
+    }
+
     function updateObjSize(v) { if(selectedObj) { selectedObj.size = parseFloat(v); render(); } }
     function updateObjColor(v) { if(selectedObj) { selectedObj.color = v; render(); } }
 
@@ -141,8 +157,9 @@
         objects.forEach(obj => {
             drawCtx.save();
             if(obj === selectedObj) {
-                drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 2/scale;
-                drawCtx.strokeRect(obj.x - (obj.size||30), obj.y - (obj.size||30), (obj.size||30)*2, (obj.size||30)*2);
+                drawCtx.strokeStyle = "rgba(255,255,255,0.8)"; drawCtx.lineWidth = 2/scale;
+                const r = (obj.size || 35) * 1.1;
+                drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
             else if(obj.type === 'arrow') drawArrow(drawCtx, obj);
@@ -162,28 +179,25 @@
             ctx.strokeStyle = "black"; ctx.lineWidth = obj.size / 10; ctx.strokeText(content, 0, 0);
             ctx.fillStyle = obj.color; ctx.fillText(content, 0, 0);
         } else {
-            ctx.shadowBlur = 5; ctx.fillText(content, 0, 0);
+            ctx.shadowColor = "rgba(0,0,0,0.5)"; ctx.shadowBlur = 5; ctx.fillText(content, 0, 0);
         }
     }
 
     function drawArrow(ctx, obj) {
-        // УМЕНЬШЕННАЯ ТОЛЩИНА (деление на 10 вместо 6)
-        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size / 10;
+        ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; 
+        ctx.lineWidth = obj.size / 10; // Тонкие стрелки
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
-        
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
-        const headLen = obj.size / 2.5; // Уменьшен наконечник
-        
+        const headLen = obj.size / 2.5; 
         ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
         ctx.lineTo(obj.x2 - headLen * Math.cos(angle - 0.5), obj.y2 - headLen * Math.sin(angle - 0.5));
         ctx.lineTo(obj.x2 - headLen * Math.cos(angle + 0.5), obj.y2 - headLen * Math.sin(angle + 0.5));
         ctx.fill();
-        
         if(obj.label) {
             ctx.font = `bold ${obj.size/1.2}px Arial`; ctx.textAlign = "center";
             ctx.strokeStyle = "black"; ctx.lineWidth = 3/scale;
-            ctx.strokeText(obj.label.toUpperCase(), obj.x2, obj.y2 - 10/scale);
-            ctx.fillText(obj.label.toUpperCase(), obj.x2, obj.y2 - 10/scale);
+            ctx.strokeText(obj.label.toUpperCase(), obj.x2, obj.y2 - 12/scale);
+            ctx.fillText(obj.label.toUpperCase(), obj.x2, obj.y2 - 12/scale);
         }
     }
 
@@ -204,7 +218,7 @@
         if(!bgImage.src) return;
         const p = getCoords(e);
         if(currentTool === 'move') {
-            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 60/scale);
+            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 70/scale);
             if(selectedObj) document.getElementById('sizeSlider').value = selectedObj.size;
             render(); return;
         }
@@ -230,7 +244,7 @@
         const size = parseFloat(document.getElementById('sizeSlider').value);
         if(currentTool === 'draw') {
             const label = prompt("Позывной:");
-            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: label });
+            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: label || "" });
         } else if(currentTool === 'tactics') {
             objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:size, color:color });
         }
