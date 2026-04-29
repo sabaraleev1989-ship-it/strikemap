@@ -3,12 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical FULL</title>
+    <title>Scorpion Tactical Ultra v.5</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
+        /* Панель инструментов */
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
         
@@ -22,17 +23,19 @@
         #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
         .hint { font-size: 10px; color: #888; text-align: center; }
 
+        /* Модальные окна */
         .modal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: var(--panel); border: 2px solid var(--accent); padding: 15px;
             border-radius: 15px; z-index: 3000; display: none; flex-direction: column; gap: 10px; width: 85%; max-width: 400px;
         }
-        #tacticsModal { grid-template-columns: repeat(4, 1fr); }
+        #tacticsModal { grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
         .map-entry { display: flex; justify-content: space-between; align-items: center; background: #21262d; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 14px; }
         input[type="text"] { background: #0d1117; border: 1px solid #30363d; color: white; padding: 10px; border-radius: 5px; }
         input[type="file"] { display: none; }
 
+        /* Игровая зона */
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; border: 1px solid #444; pointer-events: none; }
@@ -50,7 +53,7 @@
         <button onclick="document.getElementById('settingsModal').style.display='flex'">⚙️</button>
         <button onclick="undo()">↩️</button>
         <button onclick="redo()">↪️</button>
-        <button onclick="if(confirm('Очистить всё?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
+        <button onclick="if(confirm('Очистить планшет?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
@@ -61,21 +64,23 @@
     <div class="tool-row">
         <div style="display:flex; flex-direction:column; flex:2;">
             <div class="hint">РАЗМЕР / ТОЛЩИНА</div>
-            <input type="range" id="sizeSlider" min="5" max="150" value="40" oninput="updateObjSize(this.value)">
+            <input type="range" id="sizeSlider" min="10" max="250" value="50" oninput="updateObjSize(this.value)">
         </div>
-        <input type="color" id="colorPicker" value="#32d74b" style="width:40px; height:40px; border:none; background:none;" onchange="updateObjColor(this.value)">
+        <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:45px; border:none; background:none;" onchange="updateObjColor(this.value)">
     </div>
 </div>
 
 <div id="tacticsModal" class="modal">
     <button onclick="selectTacticShape('scorpion')">🦂</button>
+    <button onclick="selectTacticShape('octopus')">🐙</button>
     <button onclick="selectTacticShape('99')">99</button>
-    <button onclick="selectTacticShape('knight')">🪖</button>
+    <button onclick="selectTacticShape('knight')">LEGION</button>
     <button onclick="selectTacticShape('bsg')">BSG</button>
     <button onclick="selectTacticShape('flag')">🚩</button>
     <button onclick="selectTacticShape('skull')">💀</button>
     <button onclick="selectTacticShape('boom')">💥</button>
     <button onclick="selectTacticShape('star')">⭐</button>
+    <button onclick="selectTacticShape('sun')">☀️</button>
 </div>
 
 <div id="settingsModal" class="modal">
@@ -109,8 +114,8 @@
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
     let tempBase64 = "";
 
-    // 1. УПРАВЛЕНИЕ КАРТАМИ
-    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_final')) || [];
+    // 1. УПРАВЛЕНИЕ КАРТАМИ (LocalStorage)
+    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_final_v5')) || [];
     function updateMapDropdown() {
         const select = document.getElementById('mapPresets');
         select.innerHTML = '<option value="">🗺️ ПОЛИГОН</option><option value="logo1.png">99 Проблем</option><option value="logo2.png">Ахун</option>';
@@ -137,13 +142,13 @@
         const name = document.getElementById('newMapName').value;
         if(name && tempBase64) {
             customMaps.push({name, url: tempBase64});
-            localStorage.setItem('scorpion_maps_final', JSON.stringify(customMaps));
+            localStorage.setItem('scorpion_maps_final_v5', JSON.stringify(customMaps));
             updateMapDropdown();
             document.getElementById('settingsModal').style.display = 'none';
         }
     }
 
-    function deleteMap(i) { customMaps.splice(i, 1); localStorage.setItem('scorpion_maps_final', JSON.stringify(customMaps)); updateMapDropdown(); }
+    function deleteMap(i) { customMaps.splice(i, 1); localStorage.setItem('scorpion_maps_final_v5', JSON.stringify(customMaps)); updateMapDropdown(); }
 
     function handleMapChange(url) {
         if (!url) return;
@@ -171,6 +176,7 @@
         document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
         document.getElementById(t+'Btn')?.classList.add('active-tool');
         document.getElementById('tacticsModal').style.display = (t === 'tactics') ? 'grid' : 'none';
+        if(t !== 'move') { selectedObj = null; render(); }
     }
 
     function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
@@ -184,8 +190,9 @@
             drawCtx.save();
             if(obj === selectedObj) {
                 drawCtx.shadowBlur = 15; drawCtx.shadowColor = "white";
-                drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 2/scale;
-                drawCtx.strokeRect(obj.x-20/scale, obj.y-20/scale, 40/scale, 40/scale);
+                drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 3/scale;
+                const r = (obj.size || 40) / 1.5;
+                drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
             else if(obj.type === 'arrow') drawArrow(drawCtx, obj);
@@ -195,27 +202,45 @@
     }
 
     function drawTactic(ctx, obj) {
-        ctx.save(); ctx.translate(obj.x, obj.y); ctx.fillStyle = obj.color;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const map = { scorpion:'🦂', '99':'99', knight:'🪖', bsg:'BSG', flag:'🚩', skull:'💀', boom:'💥', star:'⭐' };
+        ctx.save();
+        ctx.translate(obj.x, obj.y);
+        ctx.fillStyle = obj.color;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        const map = { 
+            scorpion: '🦂', octopus: '🐙', '99': '99', 
+            knight: 'LEGION', bsg: 'BSG', flag: '🚩', 
+            skull: '💀', boom: '💥', star: '⭐', sun: '☀️' 
+        };
+        
+        const content = map[obj.shape] || obj.shape;
         ctx.font = `bold ${obj.size}px Arial`;
-        if(obj.shape === 'bsg' || obj.shape === '99') { ctx.strokeStyle = "black"; ctx.lineWidth = obj.size/8; ctx.strokeText(map[obj.shape], 0, 0); }
-        ctx.fillText(map[obj.shape], 0, 0); ctx.restore();
+        
+        if(['bsg', '99', 'knight'].includes(obj.shape)) {
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = obj.size / 8;
+            ctx.strokeText(content, 0, 0);
+        }
+        
+        ctx.fillText(content, 0, 0);
+        ctx.restore();
     }
 
     function drawArrow(ctx, obj) {
         ctx.strokeStyle = obj.color; ctx.fillStyle = obj.color; ctx.lineWidth = obj.size/6;
         ctx.beginPath(); ctx.moveTo(obj.x, obj.y); ctx.lineTo(obj.x2, obj.y2); ctx.stroke();
         const angle = Math.atan2(obj.y2 - obj.y, obj.x2 - obj.x);
+        const head = obj.size / 2;
         ctx.beginPath(); ctx.moveTo(obj.x2, obj.y2);
-        ctx.lineTo(obj.x2 - obj.size/2 * Math.cos(angle - 0.5), obj.y2 - obj.size/2 * Math.sin(angle - 0.5));
-        ctx.lineTo(obj.x2 - obj.size/2 * Math.cos(angle + 0.5), obj.y2 - obj.size/2 * Math.sin(angle + 0.5));
+        ctx.lineTo(obj.x2 - head * Math.cos(angle - 0.5), obj.y2 - head * Math.sin(angle - 0.5));
+        ctx.lineTo(obj.x2 - head * Math.cos(angle + 0.5), obj.y2 - head * Math.sin(angle + 0.5));
         ctx.fill();
         if(obj.label) {
             ctx.font = `bold ${obj.size/1.5}px Arial`; ctx.textAlign = "center";
             ctx.strokeStyle = "black"; ctx.lineWidth = 2/scale;
-            ctx.strokeText(obj.label.toUpperCase(), obj.x2, obj.y2 - 10/scale);
-            ctx.fillText(obj.label.toUpperCase(), obj.x2, obj.y2 - 10/scale);
+            ctx.strokeText(obj.label.toUpperCase(), obj.x2, obj.y2 - 15/scale);
+            ctx.fillText(obj.label.toUpperCase(), obj.x2, obj.y2 - 15/scale);
         }
     }
 
@@ -225,7 +250,6 @@
         obj.points.forEach(p => ctx.lineTo(p.x, p.y)); ctx.stroke();
     }
 
-    // 4. СОБЫТИЯ
     function getCoords(e) {
         const r = viewport.getBoundingClientRect();
         const cx = e.touches ? e.touches[0].clientX : e.clientX;
@@ -237,7 +261,11 @@
         if(!bgImage.src) return;
         const p = getCoords(e);
         if(currentTool === 'move') {
-            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 40/scale);
+            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 50/scale);
+            if(selectedObj) {
+                document.getElementById('sizeSlider').value = selectedObj.size;
+                selectedObj.color = document.getElementById('colorPicker').value;
+            }
             render(); return;
         }
         isDrawing = true; startP = p; saveState();
@@ -249,20 +277,30 @@
         const p = getCoords(e);
         tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
         if(currentTool === 'pencil') { objects[objects.length-1].points.push(p); render(); }
-        else if(currentTool === 'draw') drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:document.getElementById('colorPicker').value, size:document.getElementById('sizeSlider').value/scale});
+        else if(currentTool === 'draw') {
+            drawArrow(tempCtx, {x:startP.x, y:startP.y, x2:p.x, y2:p.y, color:document.getElementById('colorPicker').value, size:document.getElementById('sizeSlider').value/scale});
+        }
     });
 
     window.addEventListener('pointerup', (e) => {
         if(!isDrawing) return;
         isDrawing = false;
         const p = getCoords(e);
-        if(currentTool === 'draw') objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:document.getElementById('sizeSlider').value/scale, color:document.getElementById('colorPicker').value, label: prompt("Позывной:") });
-        else if(currentTool === 'tactics') objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:parseFloat(document.getElementById('sizeSlider').value), color:document.getElementById('colorPicker').value });
+        const color = document.getElementById('colorPicker').value;
+        const size = parseFloat(document.getElementById('sizeSlider').value);
+
+        if(currentTool === 'draw') {
+            const label = prompt("Позывной:");
+            objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: label });
+        }
+        else if(currentTool === 'tactics') {
+            objects.push({ type:'tactic', shape:currentTacticShape, x:p.x, y:p.y, size:size, color:color });
+        }
         tempCtx.clearRect(0,0, tempCanvas.width, tempCanvas.height);
         render();
     });
 
-    // 5. ЖЕСТЫ (HAMMER)
+    // 5. ЖЕСТЫ
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
     mc.add(new Hammer.Pinch({ enable: true }));
@@ -278,7 +316,7 @@
             render();
         } else if(currentTool === 'move') {
             posX = lastPosX + e.deltaX; posY = lastPosY + e.deltaY;
-            if(e.type === 'pinchmove') scale = Math.max(0.1, lastScale * e.scale);
+            if(e.type === 'pinchmove') scale = Math.max(0.05, lastScale * e.scale);
             applyTransform();
         }
     });
