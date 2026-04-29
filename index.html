@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical Ultra v.5</title>
+    <title>Scorpion Tactical Final Color</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
         
-        /* Панель инструментов */
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
         
@@ -23,7 +22,6 @@
         #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
         .hint { font-size: 10px; color: #888; text-align: center; }
 
-        /* Модальные окна */
         .modal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: var(--panel); border: 2px solid var(--accent); padding: 15px;
@@ -31,11 +29,9 @@
         }
         #tacticsModal { grid-template-columns: repeat(3, 1fr); gap: 10px; }
         
-        .map-entry { display: flex; justify-content: space-between; align-items: center; background: #21262d; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 14px; }
         input[type="text"] { background: #0d1117; border: 1px solid #30363d; color: white; padding: 10px; border-radius: 5px; }
         input[type="file"] { display: none; }
 
-        /* Игровая зона */
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; border: 1px solid #444; pointer-events: none; }
@@ -85,11 +81,11 @@
 
 <div id="settingsModal" class="modal">
     <h3 style="margin:0; text-align:center; color:var(--accent);">ДОБАВИТЬ КАРТУ</h3>
-    <input type="text" id="newMapName" placeholder="Название полигона">
-    <label for="fileInput" class="file-label" id="fileLabel">📁 ВЫБРАТЬ ИЗ ГАЛЕРЕИ</label>
+    <input type="text" id="newMapName" placeholder="Название">
+    <label for="fileInput" class="file-label">📁 ВЫБРАТЬ ФОТО</label>
     <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(this)">
     <button id="saveMapBtn" onclick="saveCustomMap()" style="background:var(--accent); color:black; font-weight:bold; display:none;">СОХРАНИТЬ</button>
-    <div id="customMapsList" style="max-height: 150px; overflow-y: auto; margin-top:10px; border-top: 1px solid #333;"></div>
+    <div id="customMapsList"></div>
     <button onclick="document.getElementById('settingsModal').style.display='none'">ЗАКРЫТЬ</button>
 </div>
 
@@ -114,41 +110,15 @@
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
     let tempBase64 = "";
 
-    // 1. УПРАВЛЕНИЕ КАРТАМИ (LocalStorage)
-    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_final_v5')) || [];
+    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_final_v6')) || [];
     function updateMapDropdown() {
         const select = document.getElementById('mapPresets');
         select.innerHTML = '<option value="">🗺️ ПОЛИГОН</option><option value="logo1.png">99 Проблем</option><option value="logo2.png">Ахун</option>';
-        document.getElementById('customMapsList').innerHTML = '';
-        customMaps.forEach((map, i) => {
+        customMaps.forEach((map) => {
             let opt = document.createElement('option'); opt.value = map.url; opt.innerText = map.name;
             select.appendChild(opt);
-            let div = document.createElement('div'); div.className = 'map-entry';
-            div.innerHTML = `<span>${map.name}</span><button onclick="deleteMap(${i})" style="flex:none; width:40px; color:var(--danger)">❌</button>`;
-            document.getElementById('customMapsList').appendChild(div);
         });
     }
-
-    function handleFileUpload(input) {
-        const file = input.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => { tempBase64 = e.target.result; document.getElementById('saveMapBtn').style.display = "flex"; };
-            reader.readAsDataURL(file);
-        }
-    }
-
-    function saveCustomMap() {
-        const name = document.getElementById('newMapName').value;
-        if(name && tempBase64) {
-            customMaps.push({name, url: tempBase64});
-            localStorage.setItem('scorpion_maps_final_v5', JSON.stringify(customMaps));
-            updateMapDropdown();
-            document.getElementById('settingsModal').style.display = 'none';
-        }
-    }
-
-    function deleteMap(i) { customMaps.splice(i, 1); localStorage.setItem('scorpion_maps_final_v5', JSON.stringify(customMaps)); updateMapDropdown(); }
 
     function handleMapChange(url) {
         if (!url) return;
@@ -170,7 +140,6 @@
         document.getElementById('zoomVal').innerText = `Зум: ${Math.round(scale * 100)}%`;
     }
 
-    // 2. ИНСТРУМЕНТЫ
     function setTool(t) {
         currentTool = t;
         document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
@@ -183,7 +152,6 @@
     function updateObjSize(v) { if(selectedObj) { selectedObj.size = parseFloat(v); render(); } }
     function updateObjColor(v) { if(selectedObj) { selectedObj.color = v; render(); } }
 
-    // 3. ОТРИСОВКА
     function render() {
         drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
         objects.forEach(obj => {
@@ -191,7 +159,7 @@
             if(obj === selectedObj) {
                 drawCtx.shadowBlur = 15; drawCtx.shadowColor = "white";
                 drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 3/scale;
-                const r = (obj.size || 40) / 1.5;
+                const r = (obj.size || 40) / 1.2;
                 drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
@@ -201,6 +169,7 @@
         });
     }
 
+    // ОСНОВНАЯ ФУНКЦИЯ ОКРАШИВАНИЯ
     function drawTactic(ctx, obj) {
         ctx.save();
         ctx.translate(obj.x, obj.y);
@@ -217,12 +186,13 @@
         const content = map[obj.shape] || obj.shape;
         ctx.font = `bold ${obj.size}px Arial`;
         
-        if(['bsg', '99', 'knight'].includes(obj.shape)) {
-            ctx.strokeStyle = "black";
-            ctx.lineWidth = obj.size / 8;
-            ctx.strokeText(content, 0, 0);
-        }
+        // Чтобы все символы (включая эмодзи) меняли цвет, 
+        // мы рисуем их с черной обводкой для контраста
+        ctx.strokeStyle = "black";
+        ctx.lineWidth = obj.size / 10;
+        ctx.strokeText(content, 0, 0);
         
+        // Само тело фигуры закрашиваем основным цветом
         ctx.fillText(content, 0, 0);
         ctx.restore();
     }
@@ -260,16 +230,19 @@
     viewport.addEventListener('pointerdown', (e) => {
         if(!bgImage.src) return;
         const p = getCoords(e);
+        const color = document.getElementById('colorPicker').value;
+        const size = parseFloat(document.getElementById('sizeSlider').value);
+
         if(currentTool === 'move') {
             selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 50/scale);
             if(selectedObj) {
                 document.getElementById('sizeSlider').value = selectedObj.size;
-                selectedObj.color = document.getElementById('colorPicker').value;
+                selectedObj.color = color; // Сразу меняем цвет при выборе
             }
             render(); return;
         }
         isDrawing = true; startP = p; saveState();
-        if(currentTool === 'pencil') objects.push({ type:'pencil', color:document.getElementById('colorPicker').value, width:document.getElementById('sizeSlider').value/10/scale, points:[p] });
+        if(currentTool === 'pencil') objects.push({ type:'pencil', color:color, width:size/10/scale, points:[p] });
     });
 
     viewport.addEventListener('pointermove', (e) => {
@@ -300,7 +273,6 @@
         render();
     });
 
-    // 5. ЖЕСТЫ
     const mc = new Hammer.Manager(viewport);
     mc.add(new Hammer.Pan({ threshold: 0, pointers: 0 }));
     mc.add(new Hammer.Pinch({ enable: true }));
