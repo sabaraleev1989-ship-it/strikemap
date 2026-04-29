@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical - Pro</title>
+    <title>Scorpion Tactical - Mobile Upload</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
@@ -12,17 +12,16 @@
         .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 5px; }
         .tool-row { display: flex; justify-content: space-between; gap: 5px; margin-bottom: 5px; align-items: center; }
         
-        button, select { 
+        button, select, label.file-label { 
             background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; 
-            font-size: 18px; cursor: pointer; flex: 1; display: flex; align-items: center; 
-            justify-content: center; min-height: 45px;
+            font-size: 16px; cursor: pointer; flex: 1; display: flex; align-items: center; 
+            justify-content: center; min-height: 45px; text-align: center;
         }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
         
         #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
-        label { font-size: 10px; color: #888; text-align: center; }
+        .hint { font-size: 10px; color: #888; text-align: center; }
 
-        /* Модальные окна */
         .modal {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: var(--panel); border: 2px solid var(--accent); padding: 15px;
@@ -32,8 +31,9 @@
         
         .map-entry { display: flex; justify-content: space-between; align-items: center; background: #21262d; padding: 8px; border-radius: 5px; margin-top: 5px; font-size: 14px; }
         input[type="text"] { background: #0d1117; border: 1px solid #30363d; color: white; padding: 10px; border-radius: 5px; }
+        input[type="file"] { display: none; }
 
-        #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; }
+        #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
         .status-bar { position: absolute; bottom: 15px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 5px 15px; border-radius: 20px; font-size: 12px; z-index: 100; border: 1px solid #444; pointer-events: none; }
     </style>
@@ -50,7 +50,7 @@
         <button onclick="document.getElementById('settingsModal').style.display='flex'">⚙️</button>
         <button onclick="undo()">↩️</button>
         <button onclick="redo()">↪️</button>
-        <button onclick="if(confirm('Очистить всё?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
+        <button onclick="if(confirm('Очистить планшет?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
     </div>
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
@@ -60,8 +60,8 @@
     </div>
     <div class="tool-row">
         <div style="display:flex; flex-direction:column; flex:2;">
-            <label>РАЗМЕР ОБЪЕКТА</label>
-            <input type="range" id="sizeSlider" min="10" max="200" value="50" oninput="updateObjSize(this.value)">
+            <div class="hint">РАЗМЕР ОБЪЕКТА</div>
+            <input type="range" id="sizeSlider" min="10" max="250" value="50" oninput="updateObjSize(this.value)">
         </div>
         <input type="color" id="colorPicker" value="#32d74b" style="width:40px; height:40px; border:none; background:none;" onchange="updateObjColor(this.value)">
     </div>
@@ -79,12 +79,15 @@
 </div>
 
 <div id="settingsModal" class="modal">
-    <h3 style="margin:0; text-align:center; color:var(--accent);">НАСТРОЙКИ КАРТ</h3>
-    <input type="text" id="newMapName" placeholder="Название полигона">
-    <input type="text" id="newMapUrl" placeholder="Ссылка на фото (URL)">
-    <button onclick="addNewMap()" style="background:var(--accent); color:black; font-weight:bold;">ДОБАВИТЬ КАРТУ</button>
-    <div id="customMapsList" style="max-height: 150px; overflow-y: auto; margin-top:10px;">
-        </div>
+    <h3 style="margin:0; text-align:center; color:var(--accent);">ДОБАВИТЬ КАРТУ</h3>
+    <input type="text" id="newMapName" placeholder="Название (напр. Лес)">
+    
+    <label for="fileInput" class="file-label" id="fileLabel">📁 ВЫБРАТЬ ФОТО</label>
+    <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(this)">
+    
+    <button id="saveMapBtn" onclick="saveCustomMap()" style="background:var(--accent); color:black; font-weight:bold; display:none;">СОХРАНИТЬ В СПИСОК</button>
+    
+    <div id="customMapsList" style="max-height: 150px; overflow-y: auto; margin-top:10px; border-top: 1px solid #333;"></div>
     <button onclick="document.getElementById('settingsModal').style.display='none'" style="margin-top:10px;">ЗАКРЫТЬ</button>
 </div>
 
@@ -99,75 +102,72 @@
     const viewport = document.getElementById('viewport'), bgCanvas = document.getElementById('bgCanvas'), drawCanvas = document.getElementById('drawCanvas'), tempCanvas = document.getElementById('tempCanvas');
     const bgCtx = bgCanvas.getContext('2d'), drawCtx = drawCanvas.getContext('2d'), tempCtx = tempCanvas.getContext('2d');
     const mapSelect = document.getElementById('mapPresets');
-    const customMapsList = document.getElementById('customMapsList');
+    let tempBase64 = "";
 
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
 
-    // Загрузка карт из памяти при старте
-    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps')) || [];
+    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_v2')) || [];
     updateMapDropdown();
 
+    function handleFileUpload(input) {
+        const file = input.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                tempBase64 = e.target.result;
+                document.getElementById('fileLabel').innerText = "✅ ФАЙЛ ВЫБРАН";
+                document.getElementById('saveMapBtn').style.display = "flex";
+            };
+            reader.readAsDataURL(file);
+        }
+    }
+
+    function saveCustomMap() {
+        const name = document.getElementById('newMapName').value;
+        if(name && tempBase64) {
+            customMaps.push({name, url: tempBase64});
+            try {
+                localStorage.setItem('scorpion_maps_v2', JSON.stringify(customMaps));
+                updateMapDropdown();
+                document.getElementById('newMapName').value = '';
+                document.getElementById('fileLabel').innerText = "📁 ВЫБРАТЬ ФОТО";
+                document.getElementById('saveMapBtn').style.display = "none";
+                alert("Карта сохранена!");
+            } catch(e) {
+                alert("Ошибка: Карта слишком тяжелая для памяти браузера!");
+            }
+        } else {
+            alert("Введите название!");
+        }
+    }
+
     function updateMapDropdown() {
-        // Очищаем и заново создаем стандартные + кастомные
         mapSelect.innerHTML = '<option value="">🗺️ ПОЛИГОН</option><option value="logo1.png">99 Проблем</option><option value="logo2.png">Ахун</option>';
-        customMapsList.innerHTML = '';
-        
+        document.getElementById('customMapsList').innerHTML = '';
         customMaps.forEach((map, index) => {
-            // Добавляем в список выбора
             let opt = document.createElement('option');
-            opt.value = map.url;
-            opt.innerText = map.name;
+            opt.value = map.url; opt.innerText = map.name;
             mapSelect.appendChild(opt);
 
-            // Добавляем в меню удаления
             let div = document.createElement('div');
             div.className = 'map-entry';
-            div.innerHTML = `<span>${map.name}</span><button onclick="deleteMap(${index})" style="flex:none; min-height:30px; padding:0 10px; color:var(--danger)">❌</button>`;
-            customMapsList.appendChild(div);
+            div.innerHTML = `<span>${map.name}</span><button onclick="deleteMap(${index})" style="flex:none; width:40px; color:var(--danger)">❌</button>`;
+            document.getElementById('customMapsList').appendChild(div);
         });
     }
 
-    function addNewMap() {
-        const name = document.getElementById('newMapName').value;
-        const url = document.getElementById('newMapUrl').value;
-        if(name && url) {
-            customMaps.push({name, url});
-            localStorage.setItem('scorpion_maps', JSON.stringify(customMaps));
-            document.getElementById('newMapName').value = '';
-            document.getElementById('newMapUrl').value = '';
-            updateMapDropdown();
-            alert("Карта добавлена!");
-        } else {
-            alert("Введите название и ссылку!");
-        }
-    }
-
     function deleteMap(index) {
-        if(confirm("Удалить эту карту?")) {
+        if(confirm("Удалить карту?")) {
             customMaps.splice(index, 1);
-            localStorage.setItem('scorpion_maps', JSON.stringify(customMaps));
+            localStorage.setItem('scorpion_maps_v2', JSON.stringify(customMaps));
             updateMapDropdown();
         }
     }
-
-    function setTool(t) {
-        currentTool = t;
-        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
-        document.getElementById(t+'Btn')?.classList.add('active-tool');
-        document.getElementById('tacticsModal').style.display = (t === 'tactics') ? 'grid' : 'none';
-        if(t !== 'move') { selectedObj = null; render(); }
-    }
-
-    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
-
-    function updateObjSize(val) { if(selectedObj) { selectedObj.size = parseFloat(val); render(); } }
-    function updateObjColor(val) { if(selectedObj) { selectedObj.color = val; render(); } }
 
     function handleMapChange(url) {
         if (!url) return;
-        bgImage.crossOrigin = "anonymous"; // Важно для загрузки из интернета
         bgImage.src = url;
         bgImage.onload = () => {
             bgCanvas.width = drawCanvas.width = tempCanvas.width = bgImage.width;
@@ -185,6 +185,18 @@
         bgCtx.drawImage(bgImage, 0, 0);
         document.getElementById('zoomVal').innerText = `Зум: ${Math.round(scale * 100)}%`;
     }
+
+    function setTool(t) {
+        currentTool = t;
+        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
+        document.getElementById(t+'Btn')?.classList.add('active-tool');
+        document.getElementById('tacticsModal').style.display = (t === 'tactics') ? 'grid' : 'none';
+        if(t !== 'move') { selectedObj = null; render(); }
+    }
+
+    function selectTacticShape(s) { currentTacticShape = s; document.getElementById('tacticsModal').style.display = 'none'; }
+    function updateObjSize(val) { if(selectedObj) { selectedObj.size = parseFloat(val); render(); } }
+    function updateObjColor(val) { if(selectedObj) { selectedObj.color = val; render(); } }
 
     function render() {
         drawCtx.clearRect(0,0, drawCanvas.width, drawCanvas.height);
@@ -209,10 +221,7 @@
         const emojiMap = { scorpion: '🦂', '99': '99', knight: '🪖', bsg: 'BSG', flag: '🚩', skull: '💀', boom: '💥', star: '⭐' };
         const content = emojiMap[obj.shape] || obj.shape;
         ctx.font = `bold ${obj.size}px Arial`;
-        if(obj.shape === 'bsg' || obj.shape === '99') {
-            ctx.strokeStyle = "black"; ctx.lineWidth = obj.size/10;
-            ctx.strokeText(content, 0, 0);
-        }
+        if(obj.shape === 'bsg' || obj.shape === '99') { ctx.strokeStyle = "black"; ctx.lineWidth = obj.size/10; ctx.strokeText(content, 0, 0); }
         ctx.fillText(content, 0, 0);
         ctx.restore();
     }
