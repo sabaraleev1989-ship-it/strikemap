@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Scorpion Tactical Final Color</title>
+    <title>Scorpion Tactical Color Fix</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
@@ -82,10 +82,9 @@
 <div id="settingsModal" class="modal">
     <h3 style="margin:0; text-align:center; color:var(--accent);">ДОБАВИТЬ КАРТУ</h3>
     <input type="text" id="newMapName" placeholder="Название">
-    <label for="fileInput" class="file-label">📁 ВЫБРАТЬ ФОТО</label>
+    <label for="fileInput" class="file-label">📁 ФОТО ИЗ ГАЛЕРЕИ</label>
     <input type="file" id="fileInput" accept="image/*" onchange="handleFileUpload(this)">
     <button id="saveMapBtn" onclick="saveCustomMap()" style="background:var(--accent); color:black; font-weight:bold; display:none;">СОХРАНИТЬ</button>
-    <div id="customMapsList"></div>
     <button onclick="document.getElementById('settingsModal').style.display='none'">ЗАКРЫТЬ</button>
 </div>
 
@@ -108,16 +107,13 @@
     let bgImage = new Image(), objects = [], history = [], redoStack = [], selectedObj = null;
     let scale = 1, posX = 0, posY = 0, lastScale, lastPosX, lastPosY;
     let currentTool = 'move', currentTacticShape = 'flag', isDrawing = false, startP = {x:0, y:0};
-    let tempBase64 = "";
 
-    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_final_v6')) || [];
+    // Локальное хранилище карт
+    let customMaps = JSON.parse(localStorage.getItem('scorpion_maps_v7')) || [];
     function updateMapDropdown() {
         const select = document.getElementById('mapPresets');
         select.innerHTML = '<option value="">🗺️ ПОЛИГОН</option><option value="logo1.png">99 Проблем</option><option value="logo2.png">Ахун</option>';
-        customMaps.forEach((map) => {
-            let opt = document.createElement('option'); opt.value = map.url; opt.innerText = map.name;
-            select.appendChild(opt);
-        });
+        customMaps.forEach(m => { let opt = document.createElement('option'); opt.value = m.url; opt.innerText = m.name; select.appendChild(opt); });
     }
 
     function handleMapChange(url) {
@@ -157,9 +153,9 @@
         objects.forEach(obj => {
             drawCtx.save();
             if(obj === selectedObj) {
-                drawCtx.shadowBlur = 15; drawCtx.shadowColor = "white";
+                drawCtx.shadowBlur = 10; drawCtx.shadowColor = "white";
                 drawCtx.strokeStyle = "white"; drawCtx.lineWidth = 3/scale;
-                const r = (obj.size || 40) / 1.2;
+                const r = obj.size;
                 drawCtx.strokeRect(obj.x - r/2, obj.y - r/2, r, r);
             }
             if(obj.type === 'tactic') drawTactic(drawCtx, obj);
@@ -169,31 +165,33 @@
         });
     }
 
-    // ОСНОВНАЯ ФУНКЦИЯ ОКРАШИВАНИЯ
+    // ИСПРАВЛЕННАЯ ОТРИСОВКА: Принудительное окрашивание
     function drawTactic(ctx, obj) {
-        ctx.save();
-        ctx.translate(obj.x, obj.y);
-        ctx.fillStyle = obj.color;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
         const map = { 
             scorpion: '🦂', octopus: '🐙', '99': '99', 
             knight: 'LEGION', bsg: 'BSG', flag: '🚩', 
             skull: '💀', boom: '💥', star: '⭐', sun: '☀️' 
         };
-        
         const content = map[obj.shape] || obj.shape;
+        
+        ctx.save();
+        ctx.translate(obj.x, obj.y);
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.font = `bold ${obj.size}px Arial`;
-        
-        // Чтобы все символы (включая эмодзи) меняли цвет, 
-        // мы рисуем их с черной обводкой для контраста
+
+        // Шаг 1: Рисуем черную обводку (будет видна вокруг цвета)
         ctx.strokeStyle = "black";
-        ctx.lineWidth = obj.size / 10;
+        ctx.lineWidth = obj.size / 6;
         ctx.strokeText(content, 0, 0);
+
+        // Шаг 2: Создаем временный слой для перекрашивания эмодзи
+        // Используем глобальное наложение, чтобы закрасить пиксели любым цветом
+        ctx.fillText(content, 0, 0); 
+        ctx.globalCompositeOperation = "source-in"; 
+        ctx.fillStyle = obj.color;
+        ctx.fillRect(-obj.size, -obj.size, obj.size*2, obj.size*2);
         
-        // Само тело фигуры закрашиваем основным цветом
-        ctx.fillText(content, 0, 0);
         ctx.restore();
     }
 
@@ -231,18 +229,16 @@
         if(!bgImage.src) return;
         const p = getCoords(e);
         const color = document.getElementById('colorPicker').value;
-        const size = parseFloat(document.getElementById('sizeSlider').value);
-
         if(currentTool === 'move') {
-            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < 50/scale);
+            selectedObj = [...objects].reverse().find(o => Math.hypot(o.x - p.x, o.y - p.y) < (o.size || 50)/scale);
             if(selectedObj) {
                 document.getElementById('sizeSlider').value = selectedObj.size;
-                selectedObj.color = color; // Сразу меняем цвет при выборе
+                selectedObj.color = color; // Смена цвета при выделении
             }
             render(); return;
         }
         isDrawing = true; startP = p; saveState();
-        if(currentTool === 'pencil') objects.push({ type:'pencil', color:color, width:size/10/scale, points:[p] });
+        if(currentTool === 'pencil') objects.push({ type:'pencil', color:color, width:document.getElementById('sizeSlider').value/10/scale, points:[p] });
     });
 
     viewport.addEventListener('pointermove', (e) => {
@@ -261,7 +257,6 @@
         const p = getCoords(e);
         const color = document.getElementById('colorPicker').value;
         const size = parseFloat(document.getElementById('sizeSlider').value);
-
         if(currentTool === 'draw') {
             const label = prompt("Позывной:");
             objects.push({ type:'arrow', x:startP.x, y:startP.y, x2:p.x, y2:p.y, size:size/scale, color:color, label: label });
