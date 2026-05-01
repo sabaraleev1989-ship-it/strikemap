@@ -4,91 +4,135 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="manifest" href="data:application/json;base64,ewogICJkZWZhdWx0X2xvY2FsZSI6ICJydSIsCiAgIm5hbWUiOiAiU2NvcnBpb24gT2ZmbGluZSIsCiAgInNob3J0X25hbWUiOiAiU2NvcnBpb24iLAogICJzdGFydF91cmwiOiAiLi8iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwYTBjMTQiLAogICJ0aGVtZV9jb2xvciI6ICIjZmY5ZjBhIgp9">
     <title>Scorpion Offline v.17.2</title>
-    
     <style>
         :root { --bg: #0a0c14; --panel: #161b22; --accent: #ff9f0a; --danger: #ff453a; }
         body { margin: 0; background: var(--bg); color: #fff; font-family: sans-serif; overflow: hidden; display: flex; flex-direction: column; height: 100vh; }
-        .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 4px; }
-        .tool-row { display: flex; gap: 4px; margin-bottom: 4px; align-items: center; }
-        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 14px; min-height: 40px; display: flex; align-items: center; justify-content: center; touch-action: manipulation; flex: 1; }
-        .btn-small { flex: 0.5; }
+        .toolbar { background: var(--panel); border-bottom: 2px solid #30363d; z-index: 2000; padding: 8px; }
+        .tool-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+        button, select { background: #21262d; border: 1px solid #30363d; color: white; border-radius: 8px; font-size: 14px; min-height: 44px; display: flex; align-items: center; justify-content: center; touch-action: manipulation; flex: 1; }
+        .btn-small { flex: 0.4; }
         .active-tool { border-color: var(--accent); background: rgba(255, 159, 10, 0.2); }
-        #sizeSlider { flex: 2.5; height: 30px; accent-color: var(--accent); }
+        #sizeSlider { flex: 2; height: 30px; accent-color: var(--accent); }
         .modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--panel); border: 2px solid var(--accent); padding: 12px; border-radius: 12px; z-index: 3000; display: none; width: 85%; max-width: 350px; grid-template-columns: repeat(3, 1fr); gap: 8px; }
         #viewport { flex-grow: 1; position: relative; background: #000; touch-action: none; overflow: hidden; }
         canvas { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-        .status-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); padding: 4px 12px; border-radius: 15px; font-size: 11px; z-index: 100; pointer-events: none; }
+        .status-bar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.8); padding: 4px 12px; border-radius: 15px; font-size: 11px; z-index: 100; pointer-events: none; border: 1px solid #333; }
     </style>
 </head>
 <body>
 
 <div class="toolbar">
     <div class="tool-row">
-        <select id="mapPresets" onchange="handleMapChange(this.value)">
-            <option value="">🗺️ КАРТА</option>
-            <option value="logo1.png" data-fixed="true">База 99</option>
-            <option value="logo2.png" data-fixed="true">Ахун</option>
+        <select id="mapPresets" onchange="loadSavedMap(this.value)">
+            <option value="">🗺️ ВЫБРАТЬ КАРТУ</option>
         </select>
-        <button class="btn-small" onclick="document.getElementById('fileInput').click()">⚙️</button>
-        <button class="btn-small" onclick="deleteCurrentMap()" style="color:var(--danger)">❌</button>
-        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="addNewMap(this)">
-        <button class="btn-small" onclick="undo()">↩️</button>
-        <button class="btn-small" onclick="redo()">↪️</button>
+        <button class="btn-small" onclick="document.getElementById('fileInput').click()">➕</button>
+        <button class="btn-small" onclick="deleteCurrentMap()" style="color:var(--danger)">🗑️</button>
+        <input type="file" id="fileInput" accept="image/*" style="display:none" onchange="handleFileUpload(this)">
     </div>
     <div class="tool-row">
         <button id="moveBtn" onclick="setTool('move')" class="active-tool">✥</button>
         <button id="pencilBtn" onclick="setTool('pencil')">✏️</button>
         <button id="drawBtn" onclick="setTool('draw')">↗️</button>
         <button id="tacticsBtn" onclick="setTool('tactics')">🚩</button>
-        <button class="btn-small" onclick="if(confirm('Очистить?')) {objects=[]; render();}" style="color: var(--danger)">🗑️</button>
+        <button class="btn-small" onclick="undo()">↩️</button>
     </div>
-    <div class="tool-row">
-        <input type="range" id="sizeSlider" min="10" max="250" value="60" oninput="updateObjSize(this.value)">
-        <input type="color" id="colorPicker" value="#32d74b" style="width:45px; height:40px; border:none; background:none; padding:0;" onchange="updateObjColor(this.value)">
-    </div>
-</div>
-
-<div id="tacticsModal" class="modal">
-    <button onclick="selectTacticShape('scorpion')">🦂</button>
-    <button onclick="selectTacticShape('octopus')">🐙</button>
-    <button onclick="selectTacticShape('99')">99</button>
-    <button onclick="selectTacticShape('knight')">LEGION</button>
-    <button onclick="selectTacticShape('bsg')">BSG</button>
-    <button onclick="selectTacticShape('flag')">🚩</button>
-    <button onclick="selectTacticShape('skull')">💀</button>
-    <button onclick="selectTacticShape('boom')">💥</button>
-    <button onclick="selectTacticShape('sun')">☀️</button>
 </div>
 
 <div id="viewport">
     <canvas id="bgCanvas"></canvas>
     <canvas id="drawCanvas"></canvas>
-    <canvas id="tempCanvas"></canvas>
-    <div class="status-bar" id="zoomVal">Зум: 100% | OFFLINE MODE</div>
+    <div class="status-bar" id="status">OFFLINE READY | v.17.2</div>
 </div>
 
 <script>
-/* Здесь должен быть код Hammer.js. 
-   Для экономии места в ответе я использую сокращенную версию загрузки, 
-   но в реальном файле я рекомендую скопировать содержимое hammer.min.js прямо сюда.
-*/
-</script>
+    // --- РАБОТА С БАЗОЙ ДАННЫХ (IndexedDB) ---
+    const dbName = "ScorpionDB";
+    let db;
 
-<script>
-    // Регистрация Service Worker для работы без сети
-    if ('serviceWorker' in navigator) {
-        const sw = `
-            const C='sc-v17.2'; 
-            self.addEventListener('install',e=>e.waitUntil(caches.open(C).then(c=>c.addAll(['./','index.html'])))); 
-            self.addEventListener('fetch',e=>e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request))));
-        `;
-        const b = new Blob([sw], {type: 'application/javascript'});
-        navigator.serviceWorker.register(URL.createObjectURL(b));
+    const request = indexedDB.open(dbName, 1);
+    request.onupgradeneeded = e => {
+        db = e.target.result;
+        db.createObjectStore("maps", { keyPath: "id" });
+    };
+    request.onsuccess = e => {
+        db = e.target.result;
+        refreshMapList();
+    };
+
+    function saveMapToDB(id, dataUrl) {
+        const tx = db.transaction("maps", "readwrite");
+        tx.objectStore("maps").put({ id, data: dataUrl });
+        refreshMapList();
     }
 
-    // Вся логика из v.17.1 сохранена полностью...
-    // (Код управления камерой, отрисовки тактики и стрелок остается прежним)
+    function refreshMapList() {
+        const select = document.getElementById('mapPresets');
+        const tx = db.transaction("maps", "readonly");
+        const store = tx.objectStore("maps");
+        store.getAll().onsuccess = e => {
+            const maps = e.target.result;
+            select.innerHTML = '<option value="">🗺️ ВЫБРАТЬ КАРТУ</option>';
+            maps.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.id;
+                select.appendChild(opt);
+            });
+        };
+    }
+
+    function handleFileUpload(input) {
+        if (input.files && input.files[0]) {
+            const name = prompt("Название карты:", "Карта " + new Date().toLocaleTimeString());
+            if (!name) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                saveMapToDB(name, e.target.result);
+                loadMapToCanvas(e.target.result);
+            };
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    function loadSavedMap(id) {
+        if (!id) return;
+        const tx = db.transaction("maps", "readonly");
+        tx.objectStore("maps").get(id).onsuccess = e => {
+            if (e.target.result) loadMapToCanvas(e.target.result.data);
+        };
+    }
+
+    function loadMapToCanvas(dataUrl) {
+        const img = new Image();
+        img.onload = () => {
+            const canvas = document.getElementById('bgCanvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+            document.getElementById('status').textContent = `Загружено: ${img.width}x${img.height}`;
+        };
+        img.src = dataUrl;
+    }
+
+    // --- РЕГИСТРАЦИЯ SERVICE WORKER ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js')
+                .then(reg => console.log('SW Registered'))
+                .catch(err => console.log('SW Error', err));
+        });
+    }
+    
+    // Заглушки для функций (инструменты)
+    function setTool(t) { 
+        document.querySelectorAll('.tool-row button').forEach(b => b.classList.remove('active-tool'));
+        document.getElementById(t+'Btn')?.classList.add('active-tool');
+    }
+    function undo() { alert('Undo pressed'); }
 </script>
 </body>
 </html>
